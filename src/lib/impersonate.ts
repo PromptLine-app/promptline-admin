@@ -9,8 +9,11 @@ import { supabase } from '@/config/supabase';
  * with VITE_CUSTOMER_APP_URL; the redirect target must be allow-listed in the
  * czqth Supabase auth settings for the magic link to land.
  */
+// The customer app must use the SAME Supabase project as this admin (czqth) for
+// the magic link to authenticate. promptline-secure.vercel.app is the czqth app;
+// dashboard.promptline.app is a different Supabase env (tokens won't work there).
 export const CUSTOMER_APP_URL =
-  (import.meta.env.VITE_CUSTOMER_APP_URL as string) || 'https://dashboard.promptline.app';
+  (import.meta.env.VITE_CUSTOMER_APP_URL as string) || 'https://promptline-secure.vercel.app';
 
 /** Resolve the login email of a tenant's owner (users.id == auth uid). */
 export async function getTenantOwnerEmail(tenantId: string): Promise<string | null> {
