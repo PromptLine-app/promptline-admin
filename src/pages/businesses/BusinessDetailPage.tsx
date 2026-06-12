@@ -5,6 +5,7 @@ import { useAuth } from '@/auth/useAuth';
 import { AdminOnly } from '@/auth/AdminOnly';
 import { useToast } from '@/components/common/Toast';
 import { PageHeader } from '@/components/common/PageHeader';
+import { BusinessTabs } from '@/components/businesses/BusinessTabs';
 import { KpiCard } from '@/components/common/KpiCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -466,7 +467,9 @@ export const BusinessDetailPage = () => {
         }
       />
 
-      <div className="dashboard-kpi-row" style={{ marginTop: '2rem' }}>
+      <BusinessTabs tenantId={business.id} />
+
+      <div className="dashboard-kpi-row" style={{ marginTop: '0.5rem' }}>
         <KpiCard label="Net Revenue Collected" value={formatUsd(business.revenue_cents || 0)} variant="success" />
         <KpiCard label="Total Calls Answered" value={(business.call_count || 0).toLocaleString()} />
         <KpiCard label="Member Since" value={new Date(business.created_at).toLocaleDateString()} />
