@@ -1,0 +1,201 @@
+import { useEffect, useState } from 'react';
+import { supabase } from '@/config/supabase';
+import { PageHeader } from '@/components/common/PageHeader';
+import { DataTable, ColumnDef } from '@/components/common/DataTable';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { useToast } from '@/components/common/Toast';
+import { useRealtime } from '@/hooks/useRealtime';
+import type { AdminUser, AdminRole } from '@/types/domain';
+import { FiPlus } from 'react-icons/fi';
+
+export const TeamPage = () => {
+  const { toast } = useToast();
+  const [team, setTeam] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<AdminRole>('admin');
+
+  const fetchTeam = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTeam(data || []);
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTeam();
+  }, []);
+
+  useRealtime({ table: 'admin_users', event: '*', onUpdate: fetchTeam });
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail || !newName) return;
+    
+    setAddLoading(true);
+    try {
+      // 1. Create user in auth.users
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: newEmail,
+        password: 'admin123',
+        email_confirm: true,
+        user_metadata: { full_name: newName }
+      });
+
+      // User might already exist in auth.users, but we don't have a reliable way to fetch them 
+      // without extra queries, so we just bubble the error for now unless it's "already exists"
+      if (authError && !authError.message.includes('already exists')) {
+        throw authError;
+      }
+      
+      const authUserId = authData.user?.id;
+      if (!authUserId) throw new Error('Could not retrieve user ID or user already exists.');
+
+      // 2. Insert into public.admin_users
+      const { error: dbError } = await supabase.from('admin_users').insert({
+        auth_user_id: authUserId,
+        email: newEmail,
+        full_name: newName,
+        role: newRole,
+        is_active: true
+      });
+
+      if (dbError) throw dbError;
+
+      toast(`Successfully added ${newName} as ${newRole}.`);
+      setShowAddModal(false);
+      setNewEmail('');
+      setNewName('');
+      setNewRole('admin');
+      fetchTeam();
+    } catch (error: any) {
+      console.error('Error adding member:', error);
+      toast(error.message || 'Failed to add team member.', 'error');
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const columns: ColumnDef<AdminUser>[] = [
+    {
+      header: 'Name',
+      id: 'full_name',
+      cell: (row) => (
+        <div>
+          <p style={{ fontWeight: 500 }}>{row.full_name || 'Unnamed'}</p>
+          <p className="text-muted" style={{ fontSize: '0.8rem' }}>{row.email}</p>
+        </div>
+      ),
+    },
+    {
+      header: 'Role',
+      id: 'role',
+      cell: (row) => <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>{row.role}</span>,
+    },
+    {
+      header: 'Status',
+      id: 'is_active',
+      cell: (row) => row.is_active ? <StatusBadge status="active" /> : <StatusBadge status="suspended" label="Inactive" />,
+    },
+    {
+      header: 'Added On',
+      id: 'created_at',
+      cell: (row) => new Date(row.created_at).toLocaleDateString(),
+    },
+  ];
+
+  return (
+    <div className="page-content">
+      <PageHeader 
+        title="Team Management" 
+        subtitle="Manage administrative access to the PromptLine dashboard"
+        actions={
+          <button className="btn btn--primary" onClick={() => setShowAddModal(true)}>
+            <FiPlus /> Add Member
+          </button>
+        }
+      />
+
+      <div className="dashboard-section">
+        {loading ? (
+          <div className="page-card"><p>Loading team members...</p></div>
+        ) : (
+          <DataTable
+            data={team}
+            columns={columns}
+            emptyMessage="No team members found."
+          />
+        )}
+      </div>
+
+      {showAddModal && (
+        <div className="dialog-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="dialog-panel" onClick={e => e.stopPropagation()}>
+            <h3>Add Team Member</h3>
+            <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
+              Provision a new dashboard account. They will be able to log in with the default password: <code>admin123</code>
+            </p>
+            
+            <form onSubmit={handleAddMember}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Full Name</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={newName} 
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Jane Doe"
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Email Address</label>
+                <input 
+                  type="email" 
+                  className="form-input" 
+                  value={newEmail} 
+                  onChange={e => setNewEmail(e.target.value)}
+                  placeholder="jane@promptline.app"
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Role</label>
+                <select 
+                  className="form-input" 
+                  value={newRole} 
+                  onChange={e => setNewRole(e.target.value as AdminRole)}
+                >
+                  <option value="admin">Admin (Full Access)</option>
+                  <option value="viewer">Viewer (Read Only)</option>
+                </select>
+              </div>
+
+              <div className="dialog-actions">
+                <button type="button" className="btn btn--ghost" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn--primary" disabled={addLoading}>
+                  {addLoading ? 'Adding...' : 'Add Member'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
