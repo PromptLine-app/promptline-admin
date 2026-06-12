@@ -89,6 +89,44 @@ export const TeamPage = () => {
     }
   };
 
+  const handleRemoveMember = async (user: AdminUser) => {
+    if (!window.confirm(`Are you sure you want to completely remove ${user.full_name}? They will lose all access.`)) return;
+    
+    try {
+      // 1. Delete from admin_users (removes dashboard access)
+      const { error: dbError } = await supabase.from('admin_users').delete().eq('id', user.id);
+      if (dbError) throw dbError;
+      
+      // 2. Cleanup from auth.users to truly remove their account
+      await supabase.auth.admin.deleteUser(user.auth_user_id);
+      
+      // 3. Cleanup the public.users record
+      await supabase.from('users').delete().eq('user_auth_id', user.auth_user_id);
+
+      toast(`Successfully removed ${user.full_name}.`);
+      fetchTeam();
+    } catch (error: any) {
+      console.error('Error removing member:', error);
+      toast(error.message || 'Failed to remove team member.', 'error');
+    }
+  };
+
+  const handleChangeRole = async (user: AdminUser, newRole: AdminRole) => {
+    try {
+      const { error } = await supabase
+        .from('admin_users')
+        .update({ role: newRole })
+        .eq('id', user.id);
+        
+      if (error) throw error;
+      toast(`Changed ${user.full_name}'s role to ${newRole}.`);
+      fetchTeam();
+    } catch (error: any) {
+      console.error('Error changing role:', error);
+      toast(error.message || 'Failed to update role.', 'error');
+    }
+  };
+
   const columns: ColumnDef<AdminUser>[] = [
     {
       header: 'Name',
@@ -114,6 +152,30 @@ export const TeamPage = () => {
       header: 'Added On',
       id: 'created_at',
       cell: (row) => new Date(row.created_at).toLocaleDateString(),
+    },
+    {
+      header: 'Actions',
+      id: 'actions',
+      cell: (row) => (
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <select 
+            className="form-input" 
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '100px', minHeight: '32px' }}
+            value={row.role}
+            onChange={(e) => handleChangeRole(row, e.target.value as AdminRole)}
+          >
+            <option value="admin">Admin</option>
+            <option value="viewer">Viewer</option>
+          </select>
+          <button 
+            className="btn btn--ghost" 
+            style={{ color: 'var(--error-color)', padding: '0.2rem 0.5rem', fontSize: '0.85rem', minHeight: '32px' }}
+            onClick={() => handleRemoveMember(row)}
+          >
+            Remove
+          </button>
+        </div>
+      ),
     },
   ];
 
