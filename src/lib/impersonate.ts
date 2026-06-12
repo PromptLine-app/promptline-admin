@@ -48,10 +48,13 @@ export async function getTenantOwnerEmail(tenantId: string): Promise<string | nu
 
 /** Generate a one-time magic-link that authenticates as `email` and lands on the customer app. */
 export async function createImpersonationLink(email: string): Promise<string> {
+  // Trailing slash so the redirect matches a `https://host/**` allow-list entry
+  // (the `**` glob requires the `/` after the host; a bare host URL won't match).
+  const redirectTo = CUSTOMER_APP_URL.endsWith('/') ? CUSTOMER_APP_URL : `${CUSTOMER_APP_URL}/`;
   const { data, error } = await supabase.auth.admin.generateLink({
     type: 'magiclink',
     email,
-    options: { redirectTo: CUSTOMER_APP_URL },
+    options: { redirectTo },
   });
   if (error) throw error;
   const link = (data?.properties as { action_link?: string } | undefined)?.action_link;
