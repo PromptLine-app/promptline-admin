@@ -10,7 +10,7 @@ import { supabase } from '@/config/supabase';
  * czqth Supabase auth settings for the magic link to land.
  */
 export const CUSTOMER_APP_URL =
-  (import.meta.env.VITE_CUSTOMER_APP_URL as string) || 'https://promptline.app';
+  (import.meta.env.VITE_CUSTOMER_APP_URL as string) || 'https://dashboard.promptline.app';
 
 /** Resolve the login email of a tenant's owner (users.id == auth uid). */
 export async function getTenantOwnerEmail(tenantId: string): Promise<string | null> {
