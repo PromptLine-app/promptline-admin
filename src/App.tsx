@@ -6,14 +6,18 @@ import { SideNav } from '@/components/navigation/SideNav';
 import { TopNav } from '@/components/navigation/TopNav';
 
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
+import { HealthPage } from '@/pages/health/HealthPage';
 import { BusinessListPage } from '@/pages/businesses/BusinessListPage';
 import { BusinessDetailPage } from '@/pages/businesses/BusinessDetailPage';
 import { RevenuePage } from '@/pages/revenue/RevenuePage';
+import { DunningPage } from '@/pages/billing/DunningPage';
 import { CallAnalyticsPage } from '@/pages/calls/CallAnalyticsPage';
+import { CallDetailPage } from '@/pages/calls/CallDetailPage';
 import { PromoCodesPage } from '@/pages/promos/PromoCodesPage';
 import { TeamPage } from '@/pages/team/TeamPage';
 import { ActivityLogPage } from '@/pages/activity/ActivityLogPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
+import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 
 const AppLayout = () => {
   return (
@@ -39,9 +43,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route 
-        path="/reset-password" 
-        element={<ResetPasswordPage />} 
+      <Route path="/auth/callback" element={<ZohoCallbackPage />} />
+      <Route
+        path="/reset-password"
+        element={<ResetPasswordPage />}
       />
 
       <Route
@@ -53,11 +58,14 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
-        
+        <Route path="health" element={<HealthPage />} />
+
         <Route path="businesses" element={<BusinessListPage />} />
         <Route path="businesses/:id" element={<BusinessDetailPage />} />
         <Route path="revenue" element={<RevenuePage />} />
+        <Route path="dunning" element={<DunningPage />} />
         <Route path="calls" element={<CallAnalyticsPage />} />
+        <Route path="calls/:id" element={<CallDetailPage />} />
         <Route path="promos" element={<PromoCodesPage />} />
         <Route path="team" element={<TeamPage />} />
         <Route path="activity" element={<ActivityLogPage />} />

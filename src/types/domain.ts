@@ -139,7 +139,7 @@ export const PLAN_OPTIONS = [
     amountCents: 9900,
     priceLabel: '$99/month',
     monthlyCalls: 100,
-    junkCalls: 0,
+    junkCalls: 100,
   },
   {
     tier: 'pro' as const,
@@ -147,7 +147,7 @@ export const PLAN_OPTIONS = [
     amountCents: 29900,
     priceLabel: '$299/month',
     monthlyCalls: 500,
-    junkCalls: 200,
+    junkCalls: 300,
   },
 ] as const;
 

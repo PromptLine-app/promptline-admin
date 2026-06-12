@@ -4,8 +4,11 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthProvider';
 import { ToastProvider } from './components/common/Toast';
 import App from './App';
+import { initSystemTheme } from './lib/theme';
 import './index.css';
 import './App.css';
+
+initSystemTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

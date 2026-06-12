@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/config/supabase';
+import { supabase, supabaseAuth } from '@/config/supabase';
+import { AdminOnly } from '@/auth/AdminOnly';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -7,6 +8,14 @@ import { useToast } from '@/components/common/Toast';
 import { useRealtime } from '@/hooks/useRealtime';
 import type { AdminUser, AdminRole } from '@/types/domain';
 import { FiPlus } from 'react-icons/fi';
+
+/** Cryptographically-strong random password — the new member never uses it;
+ *  they set their own via the reset email we send. */
+const generateTempPassword = (): string => {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('') + 'Aa1!';
+};
 
 export const TeamPage = () => {
   const { toast } = useToast();
@@ -47,20 +56,21 @@ export const TeamPage = () => {
     
     setAddLoading(true);
     try {
-      // 1. Create user in auth.users
+      // 1. Create user in auth.users with a throwaway strong password. The member
+      //    sets their real password via the reset email below — no shared secret.
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: newEmail,
-        password: 'admin123',
+        password: generateTempPassword(),
         email_confirm: true,
         user_metadata: { full_name: newName }
       });
 
-      // User might already exist in auth.users, but we don't have a reliable way to fetch them 
+      // User might already exist in auth.users, but we don't have a reliable way to fetch them
       // without extra queries, so we just bubble the error for now unless it's "already exists"
       if (authError && !authError.message.includes('already exists')) {
         throw authError;
       }
-      
+
       const authUserId = authData.user?.id;
       if (!authUserId) throw new Error('Could not retrieve user ID or user already exists.');
 
@@ -75,7 +85,16 @@ export const TeamPage = () => {
 
       if (dbError) throw dbError;
 
-      toast(`Successfully added ${newName} as ${newRole}.`);
+      // 3. Email an invite (password-reset link) so they set their own password.
+      const { error: inviteError } = await supabaseAuth.auth.resetPasswordForEmail(newEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (inviteError) {
+        console.error('Invite email failed:', inviteError);
+        toast(`${newName} was added, but the invite email failed to send. They can use "Forgot password".`, 'error');
+      } else {
+        toast(`Added ${newName} as ${newRole}. An invite email was sent to set their password.`);
+      }
       setShowAddModal(false);
       setNewEmail('');
       setNewName('');
@@ -185,9 +204,11 @@ export const TeamPage = () => {
         title="Team Management" 
         subtitle="Manage administrative access to the PromptLine dashboard"
         actions={
-          <button className="btn btn--primary" onClick={() => setShowAddModal(true)}>
-            <FiPlus /> Add Member
-          </button>
+          <AdminOnly>
+            <button className="btn btn--primary" onClick={() => setShowAddModal(true)}>
+              <FiPlus /> Add Member
+            </button>
+          </AdminOnly>
         }
       />
 
@@ -208,7 +229,7 @@ export const TeamPage = () => {
           <div className="dialog-panel" onClick={e => e.stopPropagation()}>
             <h3>Add Team Member</h3>
             <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
-              Provision a new dashboard account. They will be able to log in with the default password: <code>admin123</code>
+              Provision a new dashboard account. They'll receive an email with a secure link to set their own password.
             </p>
             
             <form onSubmit={handleAddMember}>

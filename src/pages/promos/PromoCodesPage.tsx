@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/config/supabase';
 import { useAuth } from '@/auth/useAuth';
+import { AdminOnly } from '@/auth/AdminOnly';
 import { useToast } from '@/components/common/Toast';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
@@ -102,9 +103,11 @@ export const PromoCodesPage = () => {
         title="Promo Codes" 
         subtitle="Manage trial bypass codes for special customers"
         actions={
-          <button className="btn btn--primary" onClick={handleGeneratePromo} disabled={generating || loading}>
-            <FiPlus /> {generating ? 'Generating...' : 'Generate Code'}
-          </button>
+          <AdminOnly>
+            <button className="btn btn--primary" onClick={handleGeneratePromo} disabled={generating || loading}>
+              <FiPlus /> {generating ? 'Generating...' : 'Generate Code'}
+            </button>
+          </AdminOnly>
         }
       />
 

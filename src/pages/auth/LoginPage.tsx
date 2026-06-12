@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { supabaseAuth } from '@/config/supabase';
+import { beginZohoLogin, isZohoConfigured } from '@/config/zoho';
 
 export const LoginPage = () => {
   const { user, adminUser, signInWithPassword, initializing } = useAuth();
@@ -40,6 +41,15 @@ export const LoginPage = () => {
       setError(err.message || 'Failed to sign in.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleZohoSignIn = () => {
+    setError(null);
+    try {
+      beginZohoLogin();
+    } catch (err: any) {
+      setError(err.message || 'Unable to continue with Zoho');
     }
   };
 
@@ -103,6 +113,30 @@ export const LoginPage = () => {
         ) : (
           <form className="login-card__form" onSubmit={handleSubmit}>
             {error && <div className="login-card__error">{error}</div>}
+
+            {isZohoConfigured() && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                  onClick={handleZohoSignIn}
+                  disabled={loading}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path fill="#2E9E47" d="M3 3h18v18H3z" />
+                    <path fill="#FFF" d="M8 8h8v2l-6 6h6v2H8v-2l6-6H8z" />
+                  </svg>
+                  Continue with Zoho
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
+                  <div style={{ flex: 1, height: '1px', background: 'hsl(var(--border))' }} />
+                  <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.8rem' }}>OR</span>
+                  <div style={{ flex: 1, height: '1px', background: 'hsl(var(--border))' }} />
+                </div>
+              </>
+            )}
 
             <div className="form-group">
               <label className="form-label" htmlFor="email">Email</label>

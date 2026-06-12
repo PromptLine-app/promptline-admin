@@ -1,12 +1,14 @@
 import { NavLink } from 'react-router-dom';
-import { 
-  FiPieChart, 
-  FiBriefcase, 
-  FiDollarSign, 
-  FiPhoneCall, 
-  FiGift, 
-  FiUsers, 
-  FiActivity 
+import {
+  FiPieChart,
+  FiBriefcase,
+  FiDollarSign,
+  FiPhoneCall,
+  FiGift,
+  FiUsers,
+  FiActivity,
+  FiAlertTriangle,
+  FiCreditCard
 } from 'react-icons/fi';
 import './navigation.css';
 
@@ -29,6 +31,10 @@ export const SideNav = () => {
               <span className="side-nav__icon"><FiPieChart /></span>
               Dashboard
             </NavLink>
+            <NavLink to="/health" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiAlertTriangle /></span>
+              Health
+            </NavLink>
           </div>
         </div>
 
@@ -42,6 +48,10 @@ export const SideNav = () => {
             <NavLink to="/revenue" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiDollarSign /></span>
               Revenue
+            </NavLink>
+            <NavLink to="/dunning" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiCreditCard /></span>
+              Failed Payments
             </NavLink>
             <NavLink to="/calls" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiPhoneCall /></span>
