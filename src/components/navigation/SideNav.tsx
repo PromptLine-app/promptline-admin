@@ -3,7 +3,6 @@ import {
   FiPieChart,
   FiBriefcase,
   FiDollarSign,
-  FiPhoneCall,
   FiGift,
   FiUsers,
   FiActivity,
@@ -52,10 +51,6 @@ export const SideNav = () => {
             <NavLink to="/dunning" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiCreditCard /></span>
               Failed Payments
-            </NavLink>
-            <NavLink to="/calls" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
-              <span className="side-nav__icon"><FiPhoneCall /></span>
-              Call Analytics
             </NavLink>
           </div>
         </div>

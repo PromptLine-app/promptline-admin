@@ -89,8 +89,8 @@ export const CallDetailPage = () => {
     return (
       <div className="page-content">
         <PageHeader title="Call Not Found" />
-        <button className="btn btn--ghost" onClick={() => navigate('/calls')}>
-          <FiArrowLeft /> Back to Call Analytics
+        <button className="btn btn--ghost" onClick={() => navigate(-1)}>
+          <FiArrowLeft /> Back
         </button>
       </div>
     );
@@ -106,9 +106,9 @@ export const CallDetailPage = () => {
       <button
         className="btn btn--ghost"
         style={{ padding: 0, marginBottom: '1rem', color: 'hsl(var(--muted-foreground))' }}
-        onClick={() => navigate('/calls')}
+        onClick={() => navigate(-1)}
       >
-        <FiArrowLeft /> Back to Call Analytics
+        <FiArrowLeft /> Back
       </button>
 
       <PageHeader
