@@ -16,6 +16,8 @@ export const CallAnalyticsPage = () => {
   const navigate = useNavigate();
   const [calls, setCalls] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
+  // tenant_id -> business name, so the table can show friendly names instead of UUIDs.
+  const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
 
   // Filters
   const [search, setSearch] = useState('');
@@ -45,6 +47,16 @@ export const CallAnalyticsPage = () => {
     fetchCalls();
   }, []);
 
+  // Load the tenant_id -> company_name map once (small set; rarely changes).
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('tenants').select('id, company_name');
+      if (data) {
+        setTenantNames(Object.fromEntries(data.map((t) => [t.id, t.company_name || ''])));
+      }
+    })();
+  }, []);
+
   useRealtime({ table: 'interactions', event: '*', onUpdate: fetchCalls });
 
   const statusOptions = useMemo(() => {
@@ -64,7 +76,8 @@ export const CallAnalyticsPage = () => {
       if (statusFilter !== 'all' && statusFilter !== 'failed' && c.status !== statusFilter) return false;
       if (directionFilter !== 'all' && c.direction !== directionFilter) return false;
       if (q) {
-        const hay = `${c.tenant_id} ${c.eleven_conv_id || ''} ${c.summary || ''}`.toLowerCase();
+        const name = tenantNames[c.tenant_id] || '';
+        const hay = `${name} ${c.tenant_id} ${c.eleven_conv_id || ''} ${c.summary || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       if (fromTs || toTs) {
@@ -74,7 +87,7 @@ export const CallAnalyticsPage = () => {
       }
       return true;
     });
-  }, [calls, search, statusFilter, directionFilter, fromDate, toDate]);
+  }, [calls, search, statusFilter, directionFilter, fromDate, toDate, tenantNames]);
 
   const metrics = useMemo(() => {
     let completedCount = 0;
@@ -102,6 +115,7 @@ export const CallAnalyticsPage = () => {
   const handleExport = () => {
     exportToCsv('calls.csv', filtered, [
       { header: 'Date', value: (c) => new Date(c.created_at).toISOString() },
+      { header: 'Business', value: (c) => tenantNames[c.tenant_id] || '' },
       { header: 'Tenant ID', value: (c) => c.tenant_id },
       { header: 'Direction', value: (c) => c.direction ?? '' },
       { header: 'Status', value: (c) => c.status ?? '' },
@@ -126,9 +140,18 @@ export const CallAnalyticsPage = () => {
       cell: (row) => new Date(row.created_at).toLocaleString(),
     },
     {
-      header: 'Tenant ID',
+      header: 'Business',
       accessorKey: 'tenant_id',
-      cell: (row) => <span style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>{row.tenant_id}</span>,
+      cell: (row) => {
+        const name = tenantNames[row.tenant_id];
+        return name ? (
+          <span title={row.tenant_id}>{name}</span>
+        ) : (
+          <span style={{ fontSize: '0.8rem', fontFamily: 'monospace' }} title="No matching business">
+            {row.tenant_id}
+          </span>
+        );
+      },
     },
     {
       header: 'Direction',
@@ -202,7 +225,7 @@ export const CallAnalyticsPage = () => {
             <label className="form-label">Search</label>
             <input
               className="form-input"
-              placeholder="Tenant ID, conversation ID, summary…"
+              placeholder="Business, conversation ID, summary…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
