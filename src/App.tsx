@@ -15,7 +15,7 @@ import { BusinessAutomationsPage } from '@/pages/businesses/BusinessAutomationsP
 import { BusinessNotesPage } from '@/pages/businesses/BusinessNotesPage';
 import { RevenuePage } from '@/pages/revenue/RevenuePage';
 import { DunningPage } from '@/pages/billing/DunningPage';
-import { CallAnalyticsPage } from '@/pages/calls/CallAnalyticsPage';
+import { BusinessCallsPage } from '@/pages/businesses/BusinessCallsPage';
 import { CallDetailPage } from '@/pages/calls/CallDetailPage';
 import { PromoCodesPage } from '@/pages/promos/PromoCodesPage';
 import { TeamPage } from '@/pages/team/TeamPage';
@@ -67,12 +67,12 @@ export default function App() {
         <Route path="businesses" element={<BusinessListPage />} />
         <Route path="businesses/:id" element={<BusinessDetailPage />} />
         <Route path="businesses/:id/agent" element={<BusinessAgentPage />} />
+        <Route path="businesses/:id/calls" element={<BusinessCallsPage />} />
         <Route path="businesses/:id/conversations" element={<BusinessConversationsPage />} />
         <Route path="businesses/:id/automations" element={<BusinessAutomationsPage />} />
         <Route path="businesses/:id/notes" element={<BusinessNotesPage />} />
         <Route path="revenue" element={<RevenuePage />} />
         <Route path="dunning" element={<DunningPage />} />
-        <Route path="calls" element={<CallAnalyticsPage />} />
         <Route path="calls/:id" element={<CallDetailPage />} />
         <Route path="promos" element={<PromoCodesPage />} />
         <Route path="team" element={<TeamPage />} />

@@ -11,6 +11,7 @@ import { FiExternalLink } from 'react-icons/fi';
 const TABS = [
   { to: '', label: 'Overview', end: true },
   { to: 'agent', label: 'Agent' },
+  { to: 'calls', label: 'Calls' },
   { to: 'conversations', label: 'Conversations' },
   { to: 'automations', label: 'Automations' },
   { to: 'notes', label: 'Notes' },
