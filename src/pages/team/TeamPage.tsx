@@ -8,14 +8,7 @@ import { useToast } from '@/components/common/Toast';
 import { useRealtime } from '@/hooks/useRealtime';
 import type { AdminUser, AdminRole } from '@/types/domain';
 import { FiPlus } from 'react-icons/fi';
-
-/** Cryptographically-strong random password — the new member never uses it;
- *  they set their own via the reset email we send. */
-const generateTempPassword = (): string => {
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('') + 'Aa1!';
-};
+import { adminApi } from '@/lib/adminApi';
 
 export const TeamPage = () => {
   const { toast } = useToast();
@@ -56,34 +49,13 @@ export const TeamPage = () => {
     
     setAddLoading(true);
     try {
-      // 1. Create user in auth.users with a throwaway strong password. The member
-      //    sets their real password via the reset email below — no shared secret.
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // 1+2. Create the auth user + admin_users row on the server (needs the
+      //      service-role key, which no longer ships in the browser bundle).
+      await adminApi('/api/admin/team', 'POST', {
         email: newEmail,
-        password: generateTempPassword(),
-        email_confirm: true,
-        user_metadata: { full_name: newName }
-      });
-
-      // User might already exist in auth.users, but we don't have a reliable way to fetch them
-      // without extra queries, so we just bubble the error for now unless it's "already exists"
-      if (authError && !authError.message.includes('already exists')) {
-        throw authError;
-      }
-
-      const authUserId = authData.user?.id;
-      if (!authUserId) throw new Error('Could not retrieve user ID or user already exists.');
-
-      // 2. Insert into public.admin_users
-      const { error: dbError } = await supabase.from('admin_users').insert({
-        auth_user_id: authUserId,
-        email: newEmail,
-        full_name: newName,
+        fullName: newName,
         role: newRole,
-        is_active: true
       });
-
-      if (dbError) throw dbError;
 
       // 3. Email an invite (password-reset link) so they set their own password.
       const { error: inviteError } = await supabaseAuth.auth.resetPasswordForEmail(newEmail, {
@@ -112,15 +84,12 @@ export const TeamPage = () => {
     if (!window.confirm(`Are you sure you want to completely remove ${user.full_name}? They will lose all access.`)) return;
     
     try {
-      // 1. Delete from admin_users (removes dashboard access)
-      const { error: dbError } = await supabase.from('admin_users').delete().eq('id', user.id);
-      if (dbError) throw dbError;
-      
-      // 2. Cleanup from auth.users to truly remove their account
-      await supabase.auth.admin.deleteUser(user.auth_user_id);
-      
-      // 3. Cleanup the public.users record
-      await supabase.from('users').delete().eq('user_auth_id', user.auth_user_id);
+      // Remove the admin_users row, the auth user, and the public.users record on
+      // the server (deleteUser needs the service-role key).
+      await adminApi('/api/admin/team', 'DELETE', {
+        id: user.id,
+        authUserId: user.auth_user_id,
+      });
 
       toast(`Successfully removed ${user.full_name}.`);
       fetchTeam();

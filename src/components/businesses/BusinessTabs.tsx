@@ -5,7 +5,7 @@ import { useAuth } from '@/auth/useAuth';
 import { AdminOnly } from '@/auth/AdminOnly';
 import { useToast } from '@/components/common/Toast';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { getTenantOwnerEmail, createImpersonationLink } from '@/lib/impersonate';
+import { openCustomerView } from '@/lib/impersonate';
 import { FiExternalLink } from 'react-icons/fi';
 
 const TABS = [
@@ -30,12 +30,7 @@ export const BusinessTabs = ({ tenantId }: { tenantId: string }) => {
   const handleOpenCustomerView = async () => {
     setOpening(true);
     try {
-      const email = await getTenantOwnerEmail(tenantId);
-      if (!email) {
-        toast('No owner account found for this business — cannot open customer view.', 'error');
-        return;
-      }
-      const link = await createImpersonationLink(email);
+      const { action_link, email } = await openCustomerView(tenantId);
 
       if (adminUser) {
         await supabase.from('admin_activity_log').insert({
@@ -46,7 +41,7 @@ export const BusinessTabs = ({ tenantId }: { tenantId: string }) => {
         });
       }
 
-      window.open(link, '_blank', 'noopener,noreferrer');
+      window.open(action_link, '_blank', 'noopener,noreferrer');
       toast(`Opening customer view as ${email}…`);
     } catch (err: any) {
       console.error('Impersonation failed:', err);
