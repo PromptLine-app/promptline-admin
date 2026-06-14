@@ -3,6 +3,7 @@ import type { PropsWithChildren } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabaseAuth, supabase } from '@/config/supabase';
 import type { AdminRole, AdminUser } from '@/types/domain';
+import { clearSentryUser, setSentryUser } from '@/lib/sentry';
 
 export type AuthContextValue = {
   user: User | null;
@@ -72,6 +73,19 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       listener?.subscription?.unsubscribe();
     };
   }, [loadAdminUser]);
+
+  // Identify the authenticated user to Sentry so errors can be filtered by user.
+  useEffect(() => {
+    const authUser = session?.user;
+    if (!authUser?.id) {
+      clearSentryUser();
+      return;
+    }
+    setSentryUser({
+      id: authUser.id,
+      email: authUser.email ?? undefined,
+    });
+  }, [session]);
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
     setAuthError(null);

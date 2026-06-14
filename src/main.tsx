@@ -5,9 +5,11 @@ import { AuthProvider } from './auth/AuthProvider';
 import { ToastProvider } from './components/common/Toast';
 import App from './App';
 import { initSystemTheme } from './lib/theme';
+import { initSentry } from './lib/sentry';
 import './index.css';
 import './App.css';
 
+initSentry();
 initSystemTheme();
 
 createRoot(document.getElementById('root')!).render(
