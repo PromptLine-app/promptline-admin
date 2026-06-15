@@ -38,3 +38,12 @@ export const setSentryUser = (user: SentryUser) => {
 export const clearSentryUser = () => {
   Sentry.setUser(null);
 };
+
+export function reportError(error: unknown, context?: Record<string, unknown>) {
+  // no-op safe if Sentry not initialized; never throw from here
+  try {
+    Sentry.captureException(error, context ? { extra: context } : undefined);
+  } catch {
+    /* ignore */
+  }
+}

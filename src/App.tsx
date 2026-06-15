@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react';
 import { Routes, Route, Outlet } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { LoginPage } from '@/pages/auth/LoginPage';
@@ -24,6 +25,37 @@ import { UserFollowupsPage } from '@/pages/users/UserFollowupsPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 
+const ErrorFallback = () => (
+  <div
+    style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '1rem',
+      padding: '2rem',
+      textAlign: 'center',
+    }}
+  >
+    <h1 style={{ fontSize: '1.25rem', margin: 0 }}>Something went wrong</h1>
+    <p style={{ margin: 0, opacity: 0.8 }}>Please refresh the page to try again.</p>
+    <button
+      type="button"
+      onClick={() => window.location.reload()}
+      style={{
+        padding: '0.5rem 1.25rem',
+        borderRadius: '0.5rem',
+        border: 'none',
+        cursor: 'pointer',
+        fontWeight: 600,
+      }}
+    >
+      Refresh
+    </button>
+  </div>
+);
+
 const AppLayout = () => {
   return (
     <div className="app-layout">
@@ -46,6 +78,7 @@ export default function App() {
   }
 
   return (
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<ZohoCallbackPage />} />
@@ -83,5 +116,6 @@ export default function App() {
         <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>404 Not Found</h3><p>The page you're looking for doesn't exist.</p></div></div>} />
       </Route>
     </Routes>
+    </Sentry.ErrorBoundary>
   );
 }
