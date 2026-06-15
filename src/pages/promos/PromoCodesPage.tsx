@@ -16,6 +16,8 @@ export const PromoCodesPage = () => {
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [discountType, setDiscountType] = useState<'trial_bypass' | 'percentage'>('trial_bypass');
+  const [discountValue, setDiscountValue] = useState<string>('');
 
   const fetchPromos = async () => {
     try {
@@ -49,6 +51,8 @@ export const PromoCodesPage = () => {
       const { error } = await supabase.from('promo_codes').insert({
         code,
         is_used: false,
+        discount_type: discountType,
+        discount_value: discountType === 'percentage' ? parseInt(discountValue, 10) || 0 : null,
       });
 
       if (error) throw error;
@@ -81,6 +85,20 @@ export const PromoCodesPage = () => {
       cell: (row) => row.is_used ? <StatusBadge status="canceled" label="Used" /> : <StatusBadge status="active" label="Available" />,
     },
     {
+      header: 'Type',
+      id: 'discount_type',
+      cell: (row) => (
+        <span style={{ textTransform: 'capitalize' }}>
+          {row.discount_type?.replace('_', ' ') || 'Trial Bypass'}
+        </span>
+      ),
+    },
+    {
+      header: 'Value',
+      id: 'discount_value',
+      cell: (row) => row.discount_type === 'percentage' && row.discount_value ? `${row.discount_value}% Off` : '-',
+    },
+    {
       header: 'Used By Tenant',
       accessorKey: 'used_by_tenant',
       cell: (row) => row.used_by_tenant ? <span style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>{row.used_by_tenant}</span> : '-',
@@ -104,9 +122,32 @@ export const PromoCodesPage = () => {
         subtitle="Manage trial bypass codes for special customers"
         actions={
           <AdminOnly>
-            <button className="btn btn--primary" onClick={handleGeneratePromo} disabled={generating || loading}>
-              <FiPlus /> {generating ? 'Generating...' : 'Generate Code'}
-            </button>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <select 
+                value={discountType} 
+                onChange={(e) => setDiscountType(e.target.value as 'trial_bypass' | 'percentage')}
+                className="form-input"
+                style={{ padding: '0.4rem' }}
+              >
+                <option value="trial_bypass">Trial Bypass</option>
+                <option value="percentage">Percentage Off</option>
+              </select>
+              {discountType === 'percentage' && (
+                <input 
+                  type="number" 
+                  value={discountValue} 
+                  onChange={(e) => setDiscountValue(e.target.value)} 
+                  placeholder="% Off (e.g. 20)" 
+                  className="form-input"
+                  style={{ width: '120px', padding: '0.4rem' }}
+                  min="1"
+                  max="100"
+                />
+              )}
+              <button className="btn btn--primary" onClick={handleGeneratePromo} disabled={generating || loading || (discountType === 'percentage' && !discountValue)}>
+                <FiPlus /> {generating ? 'Generating...' : 'Generate Code'}
+              </button>
+            </div>
           </AdminOnly>
         }
       />

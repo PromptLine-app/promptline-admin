@@ -107,6 +107,8 @@ export type PromoCode = {
   id: string;
   code: string;
   is_used: boolean;
+  discount_type: 'trial_bypass' | 'percentage';
+  discount_value: number | null;
   used_by_tenant: string | null;
   used_by_user: string | null;
   used_at: string | null;

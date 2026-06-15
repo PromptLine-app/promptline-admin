@@ -20,6 +20,7 @@ import { CallDetailPage } from '@/pages/calls/CallDetailPage';
 import { PromoCodesPage } from '@/pages/promos/PromoCodesPage';
 import { TeamPage } from '@/pages/team/TeamPage';
 import { ActivityLogPage } from '@/pages/activity/ActivityLogPage';
+import { UserFollowupsPage } from '@/pages/users/UserFollowupsPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="calls/:id" element={<CallDetailPage />} />
         <Route path="promos" element={<PromoCodesPage />} />
         <Route path="team" element={<TeamPage />} />
+        <Route path="followups" element={<UserFollowupsPage />} />
         <Route path="activity" element={<ActivityLogPage />} />
         
         <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>404 Not Found</h3><p>The page you're looking for doesn't exist.</p></div></div>} />
