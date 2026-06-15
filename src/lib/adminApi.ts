@@ -9,7 +9,7 @@ import { supabaseAuth } from '@/config/supabase';
  */
 export async function adminApi<T = unknown>(
   path: string,
-  method: 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'DELETE',
   body?: unknown,
 ): Promise<T> {
   const { data } = await supabaseAuth.auth.getSession();
@@ -19,7 +19,7 @@ export async function adminApi<T = unknown>(
   const res = await fetch(path, {
     method,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: body ? JSON.stringify(body) : undefined,
+    body: method !== 'GET' && body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((json as { error?: string })?.error || `Request failed (${res.status})`);

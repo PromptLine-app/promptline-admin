@@ -19,6 +19,7 @@ import { BusinessCallsPage } from '@/pages/businesses/BusinessCallsPage';
 import { CallDetailPage } from '@/pages/calls/CallDetailPage';
 import { PromoCodesPage } from '@/pages/promos/PromoCodesPage';
 import { TeamPage } from '@/pages/team/TeamPage';
+import { LeadPipelinePage } from '@/pages/leads/LeadPipelinePage';
 import { ActivityLogPage } from '@/pages/activity/ActivityLogPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
@@ -64,6 +65,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="health" element={<HealthPage />} />
 
+        <Route path="leads" element={<LeadPipelinePage />} />
         <Route path="businesses" element={<BusinessListPage />} />
         <Route path="businesses/:id" element={<BusinessDetailPage />} />
         <Route path="businesses/:id/agent" element={<BusinessAgentPage />} />
