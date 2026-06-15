@@ -3,7 +3,7 @@ import type { PropsWithChildren } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabaseAuth, supabase } from '@/config/supabase';
 import type { AdminRole, AdminUser } from '@/types/domain';
-import { clearSentryUser, setSentryUser } from '@/lib/sentry';
+import { clearSentryUser, reportError, setSentryUser } from '@/lib/sentry';
 
 export type AuthContextValue = {
   user: User | null;
@@ -39,7 +39,8 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         return;
       }
       setAdminUser(data as AdminUser);
-    } catch {
+    } catch (err) {
+      reportError(err, { where: 'AuthProvider.loadAdminUser' });
       setAdminUser(null);
     }
   }, []);

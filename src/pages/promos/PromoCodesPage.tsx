@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { useRealtime } from '@/hooks/useRealtime';
+import { reportError } from '@/lib/sentry';
 import type { PromoCode } from '@/types/domain';
 import { FiPlus } from 'react-icons/fi';
 
@@ -29,6 +30,7 @@ export const PromoCodesPage = () => {
       if (error) throw error;
       setPromos(data || []);
     } catch (error) {
+      reportError(error, { where: 'PromoCodesPage.fetchPromos' });
       console.error('Error fetching promo codes:', error);
     } finally {
       setLoading(false);
@@ -66,6 +68,7 @@ export const PromoCodesPage = () => {
       toast(`Successfully generated new promo code: ${code}`);
       fetchPromos();
     } catch (error) {
+      reportError(error, { where: 'PromoCodesPage.handleGeneratePromo' });
       console.error('Error generating promo code:', error);
       toast('Failed to generate promo code', 'error');
     } finally {

@@ -6,6 +6,7 @@ import { AdminOnly } from '@/auth/AdminOnly';
 import { useToast } from '@/components/common/Toast';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { BusinessSubLayout } from '@/components/businesses/BusinessSubLayout';
+import { reportError } from '@/lib/sentry';
 import { FiRefreshCw, FiEye, FiCheckCircle, FiXCircle } from 'react-icons/fi';
 
 type VoiceProfile = {
@@ -108,6 +109,7 @@ export const BusinessAgentPage = () => {
       setMessaging((m.data as MessagingPrefs) ?? null);
       setService((s.data as ServiceProfile) ?? null);
     } catch (error) {
+      reportError(error, { where: 'BusinessAgentPage.fetchAgent' });
       console.error('Error loading agent config:', error);
       toast('Failed to load agent configuration', 'error');
     } finally {
@@ -129,6 +131,7 @@ export const BusinessAgentPage = () => {
       if (error) throw error;
       setPromptPreview(data?.systemPrompt || '(No system prompt returned)');
     } catch (err: any) {
+      reportError(err, { where: 'BusinessAgentPage.handlePreview' });
       console.error('Prompt preview failed:', err);
       toast(err?.message || 'Failed to preview prompt', 'error');
     } finally {
@@ -160,6 +163,7 @@ export const BusinessAgentPage = () => {
       }
       fetchAgent();
     } catch (err: any) {
+      reportError(err, { where: 'BusinessAgentPage.handleResync' });
       console.error('Agent re-sync failed:', err);
       toast(err?.message || 'Failed to re-sync agent', 'error');
     } finally {

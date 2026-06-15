@@ -9,6 +9,7 @@ import { computeHealth, byRisk } from '@/lib/health';
 import type { BusinessHealth, HealthSeverity } from '@/lib/health';
 import type { Tenant, TenantBilling, TenantPlan } from '@/types/domain';
 import { exportToCsv } from '@/lib/csv';
+import { reportError } from '@/lib/sentry';
 import { FiRefreshCw, FiDownload, FiAlertTriangle } from 'react-icons/fi';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -85,6 +86,7 @@ export const HealthPage = () => {
       computed.sort(byRisk);
       setRows(computed);
     } catch (error) {
+      reportError(error, { where: 'HealthPage.fetchHealth' });
       console.error('Error computing health:', error);
     } finally {
       setLoading(false);

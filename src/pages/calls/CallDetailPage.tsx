@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { KpiCard } from '@/components/common/KpiCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import type { Interaction, Tenant } from '@/types/domain';
+import { reportError } from '@/lib/sentry';
 import { FiArrowLeft, FiCopy, FiExternalLink } from 'react-icons/fi';
 
 const formatDuration = (secs: number | null) => {
@@ -59,6 +60,7 @@ export const CallDetailPage = () => {
         setTenant((t as Tenant) ?? null);
       }
     } catch (error) {
+      reportError(error, { where: 'CallDetailPage.fetchCall' });
       console.error('Error loading call:', error);
       toast('Failed to load call', 'error');
     } finally {

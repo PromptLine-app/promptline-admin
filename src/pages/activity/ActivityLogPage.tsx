@@ -3,6 +3,7 @@ import { supabase } from '@/config/supabase';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { useRealtime } from '@/hooks/useRealtime';
+import { reportError } from '@/lib/sentry';
 import type { AdminActivityLog } from '@/types/domain';
 
 type LogRow = AdminActivityLog & {
@@ -27,6 +28,7 @@ export const ActivityLogPage = () => {
       if (error) throw error;
       setLogs(data as LogRow[] || []);
     } catch (error) {
+      reportError(error, { where: 'ActivityLogPage.fetchLogs' });
       console.error('Error fetching activity logs:', error);
     } finally {
       setLoading(false);

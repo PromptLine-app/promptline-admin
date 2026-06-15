@@ -8,6 +8,7 @@ import { KpiCard } from '@/components/common/KpiCard';
 import { useRealtime } from '@/hooks/useRealtime';
 import { formatUsd } from '@/types/domain';
 import { exportToCsv } from '@/lib/csv';
+import { reportError } from '@/lib/sentry';
 import type { TenantBillingCharge } from '@/types/domain';
 import { FiDownload } from 'react-icons/fi';
 
@@ -47,6 +48,7 @@ export const RevenuePage = () => {
         setNames(map);
       }
     } catch (error) {
+      reportError(error, { where: 'RevenuePage.fetchCharges' });
       console.error('Error fetching charges:', error);
     } finally {
       setLoading(false);

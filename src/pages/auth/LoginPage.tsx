@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { supabaseAuth } from '@/config/supabase';
 import { beginZohoLogin, isZohoConfigured } from '@/config/zoho';
+import { reportError } from '@/lib/sentry';
 
 export const LoginPage = () => {
   const { user, adminUser, signInWithPassword, initializing } = useAuth();
@@ -38,6 +39,7 @@ export const LoginPage = () => {
       await signInWithPassword(email, password);
       // Let the useEffect handle the redirect once adminUser is loaded
     } catch (err: any) {
+      reportError(err, { where: 'LoginPage.handleSubmit' });
       setError(err.message || 'Failed to sign in.');
     } finally {
       setLoading(false);
@@ -49,6 +51,7 @@ export const LoginPage = () => {
     try {
       beginZohoLogin();
     } catch (err: any) {
+      reportError(err, { where: 'LoginPage.handleZohoSignIn' });
       setError(err.message || 'Unable to continue with Zoho');
     }
   };
@@ -64,6 +67,7 @@ export const LoginPage = () => {
       if (resetError) throw resetError;
       setResetSent(true);
     } catch (err: any) {
+      reportError(err, { where: 'LoginPage.handleResetPassword' });
       setError(err.message || 'Failed to send reset email');
     } finally {
       setLoading(false);

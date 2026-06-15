@@ -6,6 +6,7 @@ import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { KpiCard } from '@/components/common/KpiCard';
 import { useRealtime } from '@/hooks/useRealtime';
+import { reportError } from '@/lib/sentry';
 import type { BusinessRow } from '@/types/domain';
 import { FiSearch } from 'react-icons/fi';
 
@@ -43,6 +44,7 @@ export const BusinessListPage = () => {
 
       setBusinesses(combined);
     } catch (error) {
+      reportError(error, { where: 'BusinessListPage.fetchBusinesses' });
       console.error('Error fetching businesses:', error);
     } finally {
       setLoading(false);

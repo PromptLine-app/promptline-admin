@@ -7,6 +7,7 @@ import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { useRealtime } from '@/hooks/useRealtime';
 import { formatUsd, getPlanOption } from '@/types/domain';
+import { reportError } from '@/lib/sentry';
 import { FiRefreshCw, FiActivity, FiAlertTriangle, FiArrowRight, FiUserPlus, FiMail } from 'react-icons/fi';
 import { 
   AreaChart, 
@@ -292,6 +293,7 @@ export const DashboardPage = () => {
       setLastUpdated(new Date());
 
     } catch (error) {
+      reportError(error, { where: 'DashboardPage.fetchMetrics' });
       console.error('Error fetching dashboard metrics:', error);
     } finally {
       setLoading(false);

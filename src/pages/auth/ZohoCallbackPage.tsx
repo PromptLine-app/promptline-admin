@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { supabaseAuth } from '@/config/supabase';
 import { zohoRedirectUri } from '@/config/zoho';
+import { reportError } from '@/lib/sentry';
 
 /**
  * Handles the Zoho OAuth callback for admin login.
@@ -79,6 +80,7 @@ const ZohoCallbackPage = () => {
         setStatus('Signed in! Redirecting…');
         navigate('/', { replace: true });
       } catch (err) {
+        reportError(err, { where: 'ZohoCallbackPage.authenticateWithZoho' });
         console.error('Zoho auth error:', err);
         setStatus(
           err instanceof Error ? err.message : 'An error occurred during authentication',

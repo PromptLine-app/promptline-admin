@@ -14,6 +14,7 @@ import { formatUsd } from '@/types/domain';
 import type { TenantBilling, TenantBillingCharge } from '@/types/domain';
 import { exportToCsv } from '@/lib/csv';
 import { sendPaymentReminder } from '@/lib/billingReminder';
+import { reportError } from '@/lib/sentry';
 import { FiRefreshCw, FiDownload, FiRotateCcw, FiBell } from 'react-icons/fi';
 
 type DunningRow = TenantBilling & {
@@ -83,6 +84,7 @@ export const DunningPage = () => {
         }),
       );
     } catch (error) {
+      reportError(error, { where: 'DunningPage.fetchDunning' });
       console.error('Error loading dunning data:', error);
     } finally {
       setLoading(false);
@@ -135,6 +137,7 @@ export const DunningPage = () => {
       }
       fetchDunning();
     } catch (err: any) {
+      reportError(err, { where: 'DunningPage.handleRetry' });
       console.error('Retry failed:', err);
       toast(err?.message || 'Failed to retry payment', 'error');
     } finally {
@@ -154,6 +157,7 @@ export const DunningPage = () => {
       });
       toast(`Reminder emailed to ${row.company_name || row.tenant_id}.`);
     } catch (err: any) {
+      reportError(err, { where: 'DunningPage.handleReminder' });
       console.error('Reminder failed:', err);
       toast(err?.message || 'Failed to send reminder', 'error');
     } finally {

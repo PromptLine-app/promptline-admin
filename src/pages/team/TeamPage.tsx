@@ -9,6 +9,7 @@ import { useRealtime } from '@/hooks/useRealtime';
 import type { AdminUser, AdminRole } from '@/types/domain';
 import { FiPlus } from 'react-icons/fi';
 import { adminApi } from '@/lib/adminApi';
+import { reportError } from '@/lib/sentry';
 
 export const TeamPage = () => {
   const { toast } = useToast();
@@ -31,6 +32,7 @@ export const TeamPage = () => {
       if (error) throw error;
       setTeam(data || []);
     } catch (error) {
+      reportError(error, { where: 'TeamPage.fetchTeam' });
       console.error('Error fetching team members:', error);
     } finally {
       setLoading(false);
@@ -62,6 +64,7 @@ export const TeamPage = () => {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (inviteError) {
+        reportError(inviteError, { where: 'TeamPage.handleAddMember.invite' });
         console.error('Invite email failed:', inviteError);
         toast(`${newName} was added, but the invite email failed to send. They can use "Forgot password".`, 'error');
       } else {
@@ -73,6 +76,7 @@ export const TeamPage = () => {
       setNewRole('admin');
       fetchTeam();
     } catch (error: any) {
+      reportError(error, { where: 'TeamPage.handleAddMember' });
       console.error('Error adding member:', error);
       toast(error.message || 'Failed to add team member.', 'error');
     } finally {
@@ -94,6 +98,7 @@ export const TeamPage = () => {
       toast(`Successfully removed ${user.full_name}.`);
       fetchTeam();
     } catch (error: any) {
+      reportError(error, { where: 'TeamPage.handleRemoveMember' });
       console.error('Error removing member:', error);
       toast(error.message || 'Failed to remove team member.', 'error');
     }
@@ -110,6 +115,7 @@ export const TeamPage = () => {
       toast(`Changed ${user.full_name}'s role to ${newRole}.`);
       fetchTeam();
     } catch (error: any) {
+      reportError(error, { where: 'TeamPage.handleChangeRole' });
       console.error('Error changing role:', error);
       toast(error.message || 'Failed to update role.', 'error');
     }

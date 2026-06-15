@@ -4,6 +4,7 @@ import { supabase } from '@/config/supabase';
 import { useToast } from '@/components/common/Toast';
 import { BusinessSubLayout } from '@/components/businesses/BusinessSubLayout';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
+import { reportError } from '@/lib/sentry';
 import { FiCheckCircle, FiCircle } from 'react-icons/fi';
 
 type Prefs = {
@@ -86,6 +87,7 @@ export const BusinessAutomationsPage = () => {
       setWebhooks((w.data as Webhook[]) ?? []);
       setDeliveries((d.data as Delivery[]) ?? []);
     } catch (error) {
+      reportError(error, { where: 'BusinessAutomationsPage.fetchData' });
       console.error('Error loading automations:', error);
       toast('Failed to load automations', 'error');
     } finally {

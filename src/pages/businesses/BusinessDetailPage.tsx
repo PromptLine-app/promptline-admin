@@ -14,6 +14,7 @@ import { useRealtime } from '@/hooks/useRealtime';
 import { PLAN_OPTIONS, formatUsd } from '@/types/domain';
 import type { BusinessRow, TenantBillingCharge } from '@/types/domain';
 import { sendPaymentReminder } from '@/lib/billingReminder';
+import { reportError } from '@/lib/sentry';
 import {
   FiArrowLeft,
   FiPhoneOff,
@@ -117,6 +118,7 @@ export const BusinessDetailPage = () => {
 
       if (billingData?.plan_tier) setSelectedPlan(billingData.plan_tier);
     } catch (error) {
+      reportError(error, { where: 'BusinessDetailPage.fetchDetails' });
       console.error('Error fetching business details:', error);
       toast('Failed to load business details', 'error');
     } finally {
@@ -153,6 +155,7 @@ export const BusinessDetailPage = () => {
       toast(`Agent successfully ${newStatus ? 'disabled' : 'enabled'}.`);
       fetchDetails();
     } catch (error) {
+      reportError(error, { where: 'BusinessDetailPage.handleToggleStatus' });
       console.error('Error toggling status:', error);
       toast('Failed to update agent status', 'error');
     }
@@ -200,6 +203,7 @@ export const BusinessDetailPage = () => {
       setShowPlanModal(false);
       fetchDetails();
     } catch (error) {
+      reportError(error, { where: 'BusinessDetailPage.handleChangePlan' });
       console.error('Error changing plan:', error);
       toast('Failed to change plan', 'error');
     }
@@ -219,6 +223,7 @@ export const BusinessDetailPage = () => {
       toast('Payment reminder emailed to the customer.');
       fetchDetails();
     } catch (error: any) {
+      reportError(error, { where: 'BusinessDetailPage.handleSendReminder' });
       console.error('Error sending reminder:', error);
       toast(error?.message || 'Failed to send reminder', 'error');
     } finally {
@@ -267,6 +272,7 @@ export const BusinessDetailPage = () => {
       setShowEditModal(false);
       fetchDetails();
     } catch (error: any) {
+      reportError(error, { where: 'BusinessDetailPage.handleSaveEdit' });
       console.error('Error saving edit:', error);
       toast(error?.message || 'Failed to update business', 'error');
     } finally {
@@ -303,6 +309,7 @@ export const BusinessDetailPage = () => {
       setCompJunk('');
       fetchDetails();
     } catch (error: any) {
+      reportError(error, { where: 'BusinessDetailPage.handleComp' });
       console.error('Error granting calls:', error);
       toast(error?.message || 'Failed to grant calls', 'error');
     } finally {
@@ -344,6 +351,7 @@ export const BusinessDetailPage = () => {
       setShowRefundModal(false);
       fetchDetails();
     } catch (error: any) {
+      reportError(error, { where: 'BusinessDetailPage.handleRefund' });
       console.error('Error issuing refund:', error);
       toast(error?.message || 'Failed to issue refund', 'error');
     } finally {
@@ -370,6 +378,7 @@ export const BusinessDetailPage = () => {
       await logActivity('retry_charge', { result: data?.success ? 'succeeded' : 'failed', status: data?.status });
       fetchDetails();
     } catch (error: any) {
+      reportError(error, { where: 'BusinessDetailPage.handleRetryCharge' });
       console.error('Error retrying charge:', error);
       toast(error?.message || 'Failed to charge card', 'error');
     } finally {

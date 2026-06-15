@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { useAuth } from '@/auth/useAuth';
+import { reportError } from '@/lib/sentry';
 import { FiRefreshCw, FiMail, FiEdit2, FiX } from 'react-icons/fi';
 
 type RegisteredUser = {
@@ -97,6 +98,7 @@ export const UserFollowupsPage = () => {
       combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setUsers(combined);
     } catch (error) {
+      reportError(error, { where: 'UserFollowupsPage.fetchUsers' });
       console.error('Error fetching users:', error);
     } finally {
       setLoading(false);
@@ -197,6 +199,7 @@ export const UserFollowupsPage = () => {
       closeModal();
       alert('Email sent successfully!');
     } catch (error) {
+      reportError(error, { where: 'UserFollowupsPage.handleSendEmail' });
       console.error('Error sending email:', error);
       const msg = error instanceof Error ? error.message : JSON.stringify(error);
       alert(`Failed to send email:\n\n${msg}`);
@@ -224,6 +227,7 @@ export const UserFollowupsPage = () => {
       await fetchUsers();
       closeModal();
     } catch (error) {
+      reportError(error, { where: 'UserFollowupsPage.handleSaveNotes' });
       console.error('Error saving notes:', error);
       alert('Failed to save notes.');
     } finally {

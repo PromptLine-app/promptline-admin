@@ -6,6 +6,7 @@ import { AdminOnly } from '@/auth/AdminOnly';
 import { useToast } from '@/components/common/Toast';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { BusinessSubLayout } from '@/components/businesses/BusinessSubLayout';
+import { reportError } from '@/lib/sentry';
 import { FiTrash2 } from 'react-icons/fi';
 
 type Note = {
@@ -46,6 +47,7 @@ export const BusinessNotesPage = () => {
       }
       setNotes((data as Note[]) ?? []);
     } catch (error) {
+      reportError(error, { where: 'BusinessNotesPage.fetchNotes' });
       console.error('Error loading notes:', error);
       toast('Failed to load notes', 'error');
     } finally {
@@ -73,6 +75,7 @@ export const BusinessNotesPage = () => {
       toast('Note added.');
       fetchNotes();
     } catch (error: any) {
+      reportError(error, { where: 'BusinessNotesPage.handleAdd' });
       console.error('Error adding note:', error);
       toast(error?.message || 'Failed to add note', 'error');
     } finally {
@@ -87,6 +90,7 @@ export const BusinessNotesPage = () => {
       toast('Note deleted.');
       fetchNotes();
     } catch (error: any) {
+      reportError(error, { where: 'BusinessNotesPage.handleDelete' });
       console.error('Error deleting note:', error);
       toast(error?.message || 'Failed to delete note', 'error');
     }

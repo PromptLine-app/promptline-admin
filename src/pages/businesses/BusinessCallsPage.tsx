@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { KpiCard } from '@/components/common/KpiCard';
 import { useRealtime } from '@/hooks/useRealtime';
 import { exportToCsv } from '@/lib/csv';
+import { reportError } from '@/lib/sentry';
 import type { Interaction } from '@/types/domain';
 import { FiDownload } from 'react-icons/fi';
 
@@ -39,6 +40,7 @@ export const BusinessCallsPage = () => {
       if (error) throw error;
       setCalls(data || []);
     } catch (error) {
+      reportError(error, { where: 'BusinessCallsPage.fetchCalls' });
       console.error('Error fetching calls:', error);
     } finally {
       setLoading(false);

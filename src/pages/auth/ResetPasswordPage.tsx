@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabaseAuth } from '@/config/supabase';
 import { useNavigate } from 'react-router-dom';
+import { reportError } from '@/lib/sentry';
 import { FiLock, FiCheck } from 'react-icons/fi';
 
 export const ResetPasswordPage = () => {
@@ -35,6 +36,7 @@ export const ResetPasswordPage = () => {
       setSuccess(true);
       setTimeout(() => navigate('/'), 2000);
     } catch (err: any) {
+      reportError(err, { where: 'ResetPasswordPage.handleReset' });
       setError(err.message || 'Failed to update password. Your reset link may have expired.');
     } finally {
       setLoading(false);

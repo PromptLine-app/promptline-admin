@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
 import { useToast } from '@/components/common/Toast';
 import { BusinessSubLayout } from '@/components/businesses/BusinessSubLayout';
+import { reportError } from '@/lib/sentry';
 
 type Thread = {
   id: string;
@@ -69,6 +70,7 @@ export const BusinessConversationsPage = () => {
         .limit(2000);
       setMessages((msgRows || []) as Message[]);
     } catch (error) {
+      reportError(error, { where: 'BusinessConversationsPage.fetchData' });
       console.error('Error loading conversations:', error);
       toast('Failed to load conversations', 'error');
     } finally {

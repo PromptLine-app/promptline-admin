@@ -6,6 +6,7 @@ import { AdminOnly } from '@/auth/AdminOnly';
 import { useToast } from '@/components/common/Toast';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { openCustomerView } from '@/lib/impersonate';
+import { reportError } from '@/lib/sentry';
 import { FiExternalLink } from 'react-icons/fi';
 
 const TABS = [
@@ -45,6 +46,7 @@ export const BusinessTabs = ({ tenantId }: { tenantId: string }) => {
       window.open(action_link, '_blank', 'noopener,noreferrer');
       toast(`Opening customer view as ${email}…`);
     } catch (err: any) {
+      reportError(err, { where: 'BusinessTabs.handleOpenCustomerView' });
       console.error('Impersonation failed:', err);
       toast(err?.message || 'Failed to open customer view', 'error');
     } finally {
