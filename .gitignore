@@ -31,3 +31,6 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Markdown files
+*.md
