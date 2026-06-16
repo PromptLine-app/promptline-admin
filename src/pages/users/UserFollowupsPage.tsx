@@ -5,6 +5,7 @@ import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { useAuth } from '@/auth/useAuth';
 import { adminApi } from '@/lib/adminApi';
+import { useToast } from '@/components/common/Toast';
 import { reportError } from '@/lib/sentry';
 import { FiRefreshCw, FiMail, FiEdit2, FiX } from 'react-icons/fi';
 
@@ -45,6 +46,7 @@ const EMAIL_TEMPLATES = [
 
 export const UserFollowupsPage = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [users, setUsers] = useState<CombinedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<CombinedUser | null>(null);
@@ -175,12 +177,12 @@ export const UserFollowupsPage = () => {
       // Refresh list
       await fetchUsers();
       closeModal();
-      alert('Email sent successfully!');
+      toast(`Email sent to ${selectedUser.email}.`);
     } catch (error) {
       reportError(error, { where: 'UserFollowupsPage.handleSendEmail' });
       console.error('Error sending email:', error);
       const msg = error instanceof Error ? error.message : JSON.stringify(error);
-      alert(`Failed to send email:\n\n${msg}`);
+      toast(`Failed to send email: ${msg}`, 'error');
     } finally {
       setSendingEmail(false);
     }
@@ -204,10 +206,11 @@ export const UserFollowupsPage = () => {
 
       await fetchUsers();
       closeModal();
+      toast('Notes saved.');
     } catch (error) {
       reportError(error, { where: 'UserFollowupsPage.handleSaveNotes' });
       console.error('Error saving notes:', error);
-      alert('Failed to save notes.');
+      toast('Failed to save notes.', 'error');
     } finally {
       setSavingNotes(false);
     }
