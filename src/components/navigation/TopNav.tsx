@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
-import { FiSun, FiMoon, FiLogOut, FiUser } from 'react-icons/fi';
+import { FiSun, FiMoon, FiLogOut, FiUser, FiServer, FiBriefcase } from 'react-icons/fi';
 
 export const TopNav = () => {
-  const { adminUser, signOut } = useAuth();
+  const { adminUser, signOut, hasBusinessAccess, hasInfraAccess } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isOnInfra = location.pathname.startsWith('/infra');
+  const showPortalToggle = hasBusinessAccess && hasInfraAccess;
+
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
@@ -24,6 +30,14 @@ export const TopNav = () => {
     setTheme(t => t === 'light' ? 'dark' : 'light');
   };
 
+  const handlePortalSwitch = () => {
+    if (isOnInfra) {
+      navigate('/');
+    } else {
+      navigate('/infra');
+    }
+  };
+
   // Close menu on click outside
   useEffect(() => {
     if (!showUserMenu) return;
@@ -39,6 +53,18 @@ export const TopNav = () => {
       </div>
 
       <div className="top-nav__actions">
+        {showPortalToggle && (
+          <button
+            onClick={handlePortalSwitch}
+            className="btn btn--secondary btn--sm"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+            title={isOnInfra ? 'Switch to Business Portal' : 'Switch to Infrastructure Portal'}
+          >
+            {isOnInfra ? <FiBriefcase /> : <FiServer />}
+            {isOnInfra ? 'Business' : 'Infrastructure'}
+          </button>
+        )}
+
         <button onClick={toggleTheme} className="icon-button" title="Toggle theme">
           {theme === 'dark' ? <FiSun /> : <FiMoon />}
         </button>
@@ -76,3 +102,4 @@ export const TopNav = () => {
     </header>
   );
 };
+

@@ -13,6 +13,8 @@ export type AuthContextValue = {
   role: AdminRole | null;
   isAdmin: boolean;
   isViewer: boolean;
+  hasBusinessAccess: boolean;
+  hasInfraAccess: boolean;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -113,6 +115,8 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       role,
       isAdmin: role === 'admin',
       isViewer: role === 'viewer',
+      hasBusinessAccess: adminUser?.has_business_access ?? true,
+      hasInfraAccess: adminUser?.has_infra_access ?? false,
       signInWithPassword,
       signOut,
     }),

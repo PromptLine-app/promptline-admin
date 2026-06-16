@@ -9,6 +9,8 @@ export type AdminUser = {
   full_name: string | null;
   role: AdminRole;
   is_active: boolean;
+  has_business_access: boolean;
+  has_infra_access: boolean;
   created_at: string;
   updated_at: string;
 };

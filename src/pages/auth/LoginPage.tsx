@@ -15,15 +15,22 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [portalMode, setPortalMode] = useState<'business' | 'infra'>('business');
 
   const from = location.state?.from?.pathname || '/';
 
   useEffect(() => {
     // If fully loaded and logged in as admin, redirect to app
     if (!initializing && user && adminUser) {
-      navigate(from, { replace: true });
+      // If the user was trying to go somewhere specific, send them there.
+      // Otherwise, send them to the portal they selected during login.
+      if (from === '/') {
+        navigate(portalMode === 'infra' ? '/infra' : '/', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     }
-  }, [user, adminUser, initializing, navigate, from]);
+  }, [user, adminUser, initializing, navigate, from, portalMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,32 +122,74 @@ export const LoginPage = () => {
             </form>
           )
         ) : (
-          <form className="login-card__form" onSubmit={handleSubmit}>
-            {error && <div className="login-card__error">{error}</div>}
+          <div className="login-card__form-wrapper">
+            <div style={{ display: 'flex', background: 'hsl(var(--muted))', padding: '4px', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setPortalMode('business')}
+                style={{
+                  flex: 1,
+                  padding: '0.5rem',
+                  border: 'none',
+                  borderRadius: 'calc(var(--radius) - 2px)',
+                  background: portalMode === 'business' ? 'hsl(var(--card))' : 'transparent',
+                  color: portalMode === 'business' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+                  boxShadow: portalMode === 'business' ? 'var(--elevation-1)' : 'none',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Business
+              </button>
+              <button
+                type="button"
+                onClick={() => setPortalMode('infra')}
+                style={{
+                  flex: 1,
+                  padding: '0.5rem',
+                  border: 'none',
+                  borderRadius: 'calc(var(--radius) - 2px)',
+                  background: portalMode === 'infra' ? 'hsl(var(--card))' : 'transparent',
+                  color: portalMode === 'infra' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+                  boxShadow: portalMode === 'infra' ? 'var(--elevation-1)' : 'none',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Infrastructure
+              </button>
+            </div>
 
-            {isZohoConfigured() && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn--secondary"
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                  onClick={handleZohoSignIn}
-                  disabled={loading}
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path fill="#2E9E47" d="M3 3h18v18H3z" />
-                    <path fill="#FFF" d="M8 8h8v2l-6 6h6v2H8v-2l6-6H8z" />
-                  </svg>
-                  Continue with Zoho
-                </button>
+            <form className="login-card__form" onSubmit={handleSubmit}>
+              {error && <div className="login-card__error">{error}</div>}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
-                  <div style={{ flex: 1, height: '1px', background: 'hsl(var(--border))' }} />
-                  <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.8rem' }}>OR</span>
-                  <div style={{ flex: 1, height: '1px', background: 'hsl(var(--border))' }} />
-                </div>
-              </>
-            )}
+              {isZohoConfigured() && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn--secondary"
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                    onClick={handleZohoSignIn}
+                    disabled={loading}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path fill="#2E9E47" d="M3 3h18v18H3z" />
+                      <path fill="#FFF" d="M8 8h8v2l-6 6h6v2H8v-2l6-6H8z" />
+                    </svg>
+                    Continue with Zoho
+                  </button>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
+                    <div style={{ flex: 1, height: '1px', background: 'hsl(var(--border))' }} />
+                    <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.8rem' }}>OR</span>
+                    <div style={{ flex: 1, height: '1px', background: 'hsl(var(--border))' }} />
+                  </div>
+                </>
+              )}
 
             <div className="form-group">
               <label className="form-label" htmlFor="email">Email</label>
@@ -184,6 +233,7 @@ export const LoginPage = () => {
               </button>
             </div>
           </form>
+          </div>
         )}
       </div>
     </div>

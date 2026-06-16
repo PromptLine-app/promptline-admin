@@ -121,6 +121,27 @@ export const TeamPage = () => {
     }
   };
 
+  const handleChangePortalAccess = async (user: AdminUser, accessType: string) => {
+    try {
+      const updates = {
+        has_business_access: accessType === 'business_only' || accessType === 'both',
+        has_infra_access: accessType === 'infra_only' || accessType === 'both',
+      };
+      const { error } = await supabase
+        .from('admin_users')
+        .update(updates)
+        .eq('id', user.id);
+        
+      if (error) throw error;
+      toast(`Updated portal access for ${user.full_name}.`);
+      fetchTeam();
+    } catch (error: any) {
+      console.error('Error changing portal access:', error);
+      toast(error.message || 'Failed to update portal access.', 'error');
+    }
+  };
+
+
   const columns: ColumnDef<AdminUser>[] = [
     {
       header: 'Name',
@@ -146,6 +167,30 @@ export const TeamPage = () => {
       header: 'Added On',
       id: 'created_at',
       cell: (row) => new Date(row.created_at).toLocaleDateString(),
+    },
+    {
+      header: 'Portal Access',
+      id: 'portal_access',
+      cell: (row) => {
+        const accessType = row.has_business_access && row.has_infra_access 
+          ? 'both' 
+          : row.has_infra_access 
+            ? 'infra_only' 
+            : 'business_only';
+            
+        return (
+          <select 
+            className="form-input" 
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '130px', minHeight: '32px' }}
+            value={accessType}
+            onChange={(e) => handleChangePortalAccess(row, e.target.value)}
+          >
+            <option value="business_only">Business Only</option>
+            <option value="infra_only">Infra Only</option>
+            <option value="both">Both Portals</option>
+          </select>
+        );
+      },
     },
     {
       header: 'Actions',

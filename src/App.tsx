@@ -3,7 +3,9 @@ import { Routes, Route, Outlet } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { AdminGuard } from '@/auth/AdminGuard';
+import { InfraGuard } from '@/auth/InfraGuard';
 import { SideNav } from '@/components/navigation/SideNav';
+import { InfraSideNav } from '@/components/navigation/InfraSideNav';
 import { TopNav } from '@/components/navigation/TopNav';
 
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
@@ -24,6 +26,7 @@ import { ActivityLogPage } from '@/pages/activity/ActivityLogPage';
 import { UserFollowupsPage } from '@/pages/users/UserFollowupsPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
+import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
 
 const ErrorFallback = () => (
   <div
@@ -56,10 +59,26 @@ const ErrorFallback = () => (
   </div>
 );
 
+/** Business portal layout — uses the standard SideNav */
 const AppLayout = () => {
   return (
     <div className="app-layout">
       <SideNav />
+      <div className="app-main">
+        <TopNav />
+        <main className="app-content">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+};
+
+/** Infrastructure portal layout — uses InfraSideNav */
+const InfraLayout = () => {
+  return (
+    <div className="app-layout">
+      <InfraSideNav />
       <div className="app-main">
         <TopNav />
         <main className="app-content">
@@ -87,6 +106,7 @@ export default function App() {
         element={<ResetPasswordPage />}
       />
 
+      {/* ── Business Portal ── */}
       <Route
         path="/"
         element={
@@ -114,6 +134,25 @@ export default function App() {
         <Route path="activity" element={<ActivityLogPage />} />
         
         <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>404 Not Found</h3><p>The page you're looking for doesn't exist.</p></div></div>} />
+      </Route>
+
+      {/* ── Infrastructure Portal ── */}
+      <Route
+        path="/infra"
+        element={
+          <AdminGuard>
+            <InfraGuard>
+              <InfraLayout />
+            </InfraGuard>
+          </AdminGuard>
+        }
+      >
+        <Route index element={<InfraDashboardPage />} />
+        {/* Placeholder routes — pages will be built as monitoring data sources are connected */}
+        <Route path="services" element={<div className="page-card"><div className="empty-state"><h3>Services</h3><p>Service monitoring coming soon.</p></div></div>} />
+        <Route path="database" element={<div className="page-card"><div className="empty-state"><h3>Database</h3><p>Database monitoring coming soon.</p></div></div>} />
+        <Route path="security" element={<div className="page-card"><div className="empty-state"><h3>Security</h3><p>Security monitoring coming soon.</p></div></div>} />
+        <Route path="logs" element={<div className="page-card"><div className="empty-state"><h3>Logs</h3><p>System logs viewer coming soon.</p></div></div>} />
       </Route>
     </Routes>
     </Sentry.ErrorBoundary>
