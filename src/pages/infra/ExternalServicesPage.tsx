@@ -25,6 +25,18 @@ interface InfraMetrics {
     tier?: string;
     error?: string;
   };
+  vercel?: {
+    status: ServiceStatus;
+    total_projects?: number;
+    projects?: Array<{ name: string; readyState: string; url: string }>;
+    error?: string;
+  };
+  supabase?: {
+    status: ServiceStatus;
+    services?: any;
+    note?: string;
+    error?: string;
+  };
 }
 
 export const ExternalServicesPage = () => {
