@@ -135,10 +135,30 @@ export const DunningPage = () => {
           details: { result: data?.success ? 'succeeded' : 'failed', status: data?.status },
         });
       }
+      
+      if (!data?.success) {
+        await supabase.from('system_error_logs').insert({
+          category: 'billing',
+          level: 'error',
+          tenant_id: row.tenant_id,
+          error_message: data?.error || 'Retry charge failed',
+          details: { context: 'Manual charge retry', status: data?.status }
+        });
+      }
+      
       fetchDunning();
     } catch (err: any) {
       reportError(err, { where: 'DunningPage.handleRetry' });
       console.error('Retry failed:', err);
+      
+      await supabase.from('system_error_logs').insert({
+        category: 'billing',
+        level: 'error',
+        tenant_id: row.tenant_id,
+        error_message: err?.message || String(err),
+        details: { context: 'Manual charge retry exception' }
+      });
+      
       toast(err?.message || 'Failed to retry payment', 'error');
     } finally {
       setRetrying(null);

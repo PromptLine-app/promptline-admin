@@ -69,20 +69,11 @@ export const UserFollowupsPage = () => {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch tenants to get list of users who ALREADY have a business
-      const { data: tenants } = await supabase.from('tenants').select('owner_user_id');
-      const ownerIds = (tenants || []).map((t) => t.owner_user_id).filter(Boolean);
-
-      // 2. Fetch all users from public.users NOT in that list
-      let query = supabase.from('users').select('*');
-      if (ownerIds.length > 0) {
-        query = query.not('id', 'in', `(${ownerIds.join(',')})`);
-      }
-      const { data: rawUsers, error: usersError } = await query;
-      
+      // 1. Fetch all users from public.users
+      const { data: rawUsers, error: usersError } = await supabase.from('users').select('*');
       if (usersError) throw usersError;
 
-      // 3. Fetch follow up records
+      // 2. Fetch follow up records
       const { data: followups, error: followupsError } = await supabase
         .from('admin_user_followups')
         .select('*');
@@ -92,10 +83,13 @@ export const UserFollowupsPage = () => {
       const followupMap = new Map<string, FollowupRecord>();
       (followups || []).forEach((f) => followupMap.set(f.user_id, f));
 
-      const combined: CombinedUser[] = (rawUsers || []).map((u) => ({
-        ...u,
-        followup: followupMap.get(u.id) || null,
-      }));
+      // 3. Combine and explicitly filter out ANY user with 'Resolved' status
+      const combined: CombinedUser[] = (rawUsers || [])
+        .map((u) => ({
+          ...u,
+          followup: followupMap.get(u.id) || null,
+        }))
+        .filter((u) => u.followup?.status !== 'Resolved'); // <--- The magic filter
 
       // Sort by latest created first
       combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -178,10 +172,19 @@ export const UserFollowupsPage = () => {
       await fetchUsers();
       closeModal();
       toast(`Email sent to ${selectedUser.email}.`);
-    } catch (error) {
+    } catch (error: any) {
       reportError(error, { where: 'UserFollowupsPage.handleSendEmail' });
       console.error('Error sending email:', error);
       const msg = error instanceof Error ? error.message : JSON.stringify(error);
+      
+      // Push error to system logs
+      await supabase.from('system_error_logs').insert({
+        category: 'email',
+        level: 'error',
+        error_message: msg,
+        details: { context: 'Sending follow-up email', to: selectedUser.email, template: selectedTemplate }
+      });
+
       toast(`Failed to send email: ${msg}`, 'error');
     } finally {
       setSendingEmail(false);
@@ -213,6 +216,29 @@ export const UserFollowupsPage = () => {
       toast('Failed to save notes.', 'error');
     } finally {
       setSavingNotes(false);
+    }
+  };
+
+  const handleDiscardUser = async (userToDiscard: CombinedUser) => {
+    if (!window.confirm(`Are you sure you want to discard ${userToDiscard.email} from the follow-up list?`)) return;
+    
+    try {
+      const { error: dbError } = await supabase
+        .from('admin_user_followups')
+        .upsert({
+          user_id: userToDiscard.id,
+          status: 'Resolved',
+          follow_up_count: userToDiscard.followup?.follow_up_count || 0,
+        });
+
+      if (dbError) throw dbError;
+
+      await fetchUsers();
+      toast(`Discarded ${userToDiscard.email}.`);
+    } catch (error) {
+      reportError(error, { where: 'UserFollowupsPage.handleDiscardUser' });
+      console.error('Error discarding user:', error);
+      toast('Failed to discard user.', 'error');
     }
   };
 
@@ -256,12 +282,22 @@ export const UserFollowupsPage = () => {
       id: 'actions',
       sortable: false,
       cell: (row) => (
-        <button 
-          className="btn btn--secondary btn--sm" 
-          onClick={(e) => { e.stopPropagation(); openUserModal(row); }}
-        >
-          Follow Up
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button 
+            className="btn btn--secondary btn--sm" 
+            onClick={(e) => { e.stopPropagation(); openUserModal(row); }}
+          >
+            Follow Up
+          </button>
+          <button 
+            className="btn btn--ghost btn--sm" 
+            style={{ color: 'var(--error-color)' }}
+            onClick={(e) => { e.stopPropagation(); handleDiscardUser(row); }}
+            title="Mark as resolved and remove from this list"
+          >
+            Discard
+          </button>
+        </div>
       ),
     },
   ];

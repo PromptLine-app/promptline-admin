@@ -127,6 +127,16 @@ export type AdminActivityLog = {
   created_at: string;
 };
 
+export type SystemErrorLog = {
+  id: string;
+  category: 'promo' | 'email' | 'billing' | 'twilio' | 'other';
+  level: 'error' | 'warning' | 'info';
+  tenant_id: string | null;
+  error_message: string;
+  details: Record<string, unknown>;
+  created_at: string;
+};
+
 /** Joined view for business list */
 export type BusinessRow = Tenant & {
   billing?: TenantBilling | null;

@@ -16,6 +16,7 @@ import { BusinessAgentPage } from '@/pages/businesses/BusinessAgentPage';
 import { BusinessConversationsPage } from '@/pages/businesses/BusinessConversationsPage';
 import { BusinessAutomationsPage } from '@/pages/businesses/BusinessAutomationsPage';
 import { BusinessNotesPage } from '@/pages/businesses/BusinessNotesPage';
+import { BusinessLogsPage } from '@/pages/businesses/BusinessLogsPage';
 import { RevenuePage } from '@/pages/revenue/RevenuePage';
 import { DunningPage } from '@/pages/billing/DunningPage';
 import { BusinessCallsPage } from '@/pages/businesses/BusinessCallsPage';
@@ -125,6 +126,7 @@ export default function App() {
         <Route path="businesses/:id/conversations" element={<BusinessConversationsPage />} />
         <Route path="businesses/:id/automations" element={<BusinessAutomationsPage />} />
         <Route path="businesses/:id/notes" element={<BusinessNotesPage />} />
+        <Route path="businesses/:id/logs" element={<BusinessLogsPage />} />
         <Route path="revenue" element={<RevenuePage />} />
         <Route path="dunning" element={<DunningPage />} />
         <Route path="calls/:id" element={<CallDetailPage />} />

@@ -67,9 +67,18 @@ export const PromoCodesPage = () => {
 
       toast(`Successfully generated new promo code: ${code}`);
       fetchPromos();
-    } catch (error) {
+    } catch (error: any) {
       reportError(error, { where: 'PromoCodesPage.handleGeneratePromo' });
       console.error('Error generating promo code:', error);
+      
+      // Push error to system logs
+      await supabase.from('system_error_logs').insert({
+        category: 'promo',
+        level: 'error',
+        error_message: error.message || String(error),
+        details: { context: 'Generating new promo code', discountType, discountValue }
+      });
+
       toast('Failed to generate promo code', 'error');
     } finally {
       setGenerating(false);

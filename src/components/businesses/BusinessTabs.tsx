@@ -16,6 +16,7 @@ const TABS = [
   { to: 'conversations', label: 'Conversations' },
   { to: 'automations', label: 'Automations' },
   { to: 'notes', label: 'Notes' },
+  { to: 'logs', label: 'System Logs' },
 ];
 
 /**
