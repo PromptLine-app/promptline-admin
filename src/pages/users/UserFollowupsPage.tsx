@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { useAuth } from '@/auth/useAuth';
+import { adminApi } from '@/lib/adminApi';
 import { reportError } from '@/lib/sentry';
 import { FiRefreshCw, FiMail, FiEdit2, FiX } from 'react-icons/fi';
 
@@ -138,40 +139,17 @@ export const UserFollowupsPage = () => {
     
     setSendingEmail(true);
     try {
-      // 1. Send the email using the send-ms-email Edge Function.
-      // The edge function requires the service-role key for its own auth check
-      // (it compares the apikey header against SUPABASE_SERVICE_ROLE_KEY).
-      // Meanwhile, Supabase's API gateway requires a valid user JWT in the
-      // Authorization header. We satisfy both by using the admin user's session
-      // token for the gateway and the service-role key as apikey for the function.
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-      const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY as string;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-      // Get the logged-in admin user's access token from the auth client
-      const { supabaseAuth } = await import('@/config/supabase');
-      const { data: sessionData } = await supabaseAuth.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const emailRes = await fetch(`${supabaseUrl}/functions/v1/send-ms-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken || anonKey}`,
-          'apikey': serviceKey,
-        },
-        body: JSON.stringify({
-          to: selectedUser.email,
-          subject: emailSubject,
-          body: emailBody,
-          body_type: 'Text',
-        }),
+      // 1. Send the email via the /api/admin/send-followup serverless route.
+      // The send-ms-email edge function authorizes against czqth's
+      // SUPABASE_SERVICE_ROLE_KEY, which must never reach the browser — the
+      // server route holds that key and brokers the call after re-checking the
+      // caller is an active admin.
+      await adminApi('/api/admin/send-followup', 'POST', {
+        to: selectedUser.email,
+        subject: emailSubject,
+        body: emailBody,
+        body_type: 'Text',
       });
-
-      const emailResult = await emailRes.json().catch(() => null);
-      if (!emailRes.ok) {
-        throw new Error(emailResult?.error || emailResult?.details || `Email failed (${emailRes.status})`);
-      }
 
       // 2. Update follow-up tracking
       const newCount = (selectedUser.followup?.follow_up_count || 0) + 1;
