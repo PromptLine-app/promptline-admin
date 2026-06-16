@@ -12,6 +12,7 @@ interface InfraMetrics {
     balance?: string;
     currency?: string;
     error?: string;
+    alerts?: any[];
   };
   openai: {
     status: ServiceStatus;
@@ -24,6 +25,7 @@ interface InfraMetrics {
     character_limit?: number;
     tier?: string;
     error?: string;
+    history?: any[];
   };
   vercel?: {
     status: ServiceStatus;
