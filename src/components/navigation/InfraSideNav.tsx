@@ -45,10 +45,6 @@ export const InfraSideNav = () => {
               <span className="side-nav__icon"><FiShield /></span>
               Security
             </NavLink>
-            <NavLink to="/infra/logs" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
-              <span className="side-nav__icon"><FiActivity /></span>
-              Logs
-            </NavLink>
           </div>
         </div>
       </nav>

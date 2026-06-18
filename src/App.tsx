@@ -29,7 +29,7 @@ import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
 import { ExternalServicesPage } from '@/pages/infra/ExternalServicesPage';
-import { InfraLogsPage } from '@/pages/infra/InfraLogsPage';
+
 
 const ErrorFallback = () => (
   <div
@@ -156,7 +156,7 @@ export default function App() {
         {/* Placeholder routes — pages will be built as monitoring data sources are connected */}
         <Route path="database" element={<div className="page-card"><div className="empty-state"><h3>Database</h3><p>Database monitoring coming soon.</p></div></div>} />
         <Route path="security" element={<div className="page-card"><div className="empty-state"><h3>Security</h3><p>Security monitoring coming soon.</p></div></div>} />
-        <Route path="logs" element={<InfraLogsPage />} />
+
       </Route>
     </Routes>
     </Sentry.ErrorBoundary>
