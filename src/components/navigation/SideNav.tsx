@@ -67,6 +67,10 @@ export const SideNav = () => {
               <span className="side-nav__icon"><FiUsers /></span>
               Team
             </NavLink>
+            <NavLink to="/contact-requests" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiUserCheck /></span>
+              Contact Requests
+            </NavLink>
             <NavLink to="/followups" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiUserCheck /></span>
               User Follow-ups
