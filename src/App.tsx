@@ -25,6 +25,7 @@ import { PromoCodesPage } from '@/pages/promos/PromoCodesPage';
 import { TeamPage } from '@/pages/team/TeamPage';
 import { ActivityLogPage } from '@/pages/activity/ActivityLogPage';
 import { UserFollowupsPage } from '@/pages/users/UserFollowupsPage';
+import { ContactRequestsPage } from '@/pages/users/ContactRequestsPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
@@ -134,6 +135,7 @@ export default function App() {
         <Route path="calls/:id" element={<CallDetailPage />} />
         <Route path="promos" element={<PromoCodesPage />} />
         <Route path="team" element={<TeamPage />} />
+        <Route path="contact-requests" element={<ContactRequestsPage />} />
         <Route path="followups" element={<UserFollowupsPage />} />
         <Route path="activity" element={<ActivityLogPage />} />
         

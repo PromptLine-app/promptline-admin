@@ -18,6 +18,7 @@ const devApiRoutes: Record<string, string> = {
   '/api/zoho/session': 'api/zoho/session.js',
   '/api/admin/impersonate': 'api/admin/impersonate.js',
   '/api/admin/team': 'api/admin/team.js',
+  '/api/admin/send-followup': 'api/admin/send-followup.js',
 };
 
 function devApi(): Plugin {
@@ -75,6 +76,7 @@ export default defineConfig(({ mode }) => {
     'ZOHO_CLIENT_ID',
     'ZOHO_CLIENT_SECRET',
     'SUPABASE_SERVICE_ROLE_KEY',
+    'SUPABASE_SECRET_KEY',
     'SUPABASE_URL',
     'VITE_SUPABASE_URL',
   ]) {
