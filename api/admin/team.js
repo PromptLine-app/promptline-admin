@@ -8,8 +8,8 @@
 //   POST   { email, fullName, role }  -> create auth user + admin_users row
 //   DELETE { id, authUserId }         -> remove admin_users + auth user + users
 //
-// After a successful POST the browser still sends the password-reset "invite"
-// email itself (anon-key operation), so the new member sets their own password.
+// After a successful POST, no email is sent; the admin gives the credentials to
+// the new member manually.
 //
 // Required server env: SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL or VITE_SUPABASE_URL.
 
@@ -24,16 +24,15 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
 
     if (req.method === "POST") {
-      const { email, fullName, role } = body;
-      if (!email || !fullName || !role) {
-        return res.status(400).json({ error: "Missing email, fullName, or role" });
+      const { email, fullName, role, password } = body;
+      if (!email || !fullName || !role || !password) {
+        return res.status(400).json({ error: "Missing email, fullName, role, or password" });
       }
 
-      // Throwaway strong password; the member sets their real one via the reset
-      // email the browser sends after this returns — no shared secret.
+      // The admin sets the initial password directly.
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         email,
-        password: `Aa1!${randomUUID()}`,
+        password,
         email_confirm: true,
         user_metadata: { full_name: fullName },
       });

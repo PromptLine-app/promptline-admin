@@ -20,6 +20,7 @@ export const TeamPage = () => {
   const [addLoading, setAddLoading] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<AdminRole>('admin');
 
   const fetchTeam = async () => {
@@ -47,32 +48,23 @@ export const TeamPage = () => {
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmail || !newName) return;
+    if (!newEmail || !newName || !newPassword) return;
     
     setAddLoading(true);
     try {
-      // 1+2. Create the auth user + admin_users row on the server (needs the
-      //      service-role key, which no longer ships in the browser bundle).
+      // 1. Create the auth user + admin_users row on the server
       await adminApi('/api/admin/team', 'POST', {
         email: newEmail,
         fullName: newName,
+        password: newPassword,
         role: newRole,
       });
 
-      // 3. Email an invite (password-reset link) so they set their own password.
-      const { error: inviteError } = await supabaseAuth.auth.resetPasswordForEmail(newEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (inviteError) {
-        reportError(inviteError, { where: 'TeamPage.handleAddMember.invite' });
-        console.error('Invite email failed:', inviteError);
-        toast(`${newName} was added, but the invite email failed to send. They can use "Forgot password".`, 'error');
-      } else {
-        toast(`Added ${newName} as ${newRole}. An invite email was sent to set their password.`);
-      }
+      toast(`Added ${newName} as ${newRole}.`);
       setShowAddModal(false);
       setNewEmail('');
       setNewName('');
+      setNewPassword('');
       setNewRole('admin');
       fetchTeam();
     } catch (error: any) {
@@ -249,7 +241,7 @@ export const TeamPage = () => {
           <div className="dialog-panel" onClick={e => e.stopPropagation()}>
             <h3>Add Team Member</h3>
             <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
-              Provision a new dashboard account. They'll receive an email with a secure link to set their own password.
+              Provision a new dashboard account and set their initial password.
             </p>
             
             <form onSubmit={handleAddMember}>
@@ -273,6 +265,18 @@ export const TeamPage = () => {
                   value={newEmail} 
                   onChange={e => setNewEmail(e.target.value)}
                   placeholder="jane@promptline.app"
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Temporary Password</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={newPassword} 
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Enter a secure password..."
                   required
                 />
               </div>
