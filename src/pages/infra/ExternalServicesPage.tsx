@@ -141,7 +141,7 @@ export const ExternalServicesPage = () => {
                   <span style={{ fontSize: '0.8rem', color: '#3b82f6', fontWeight: 600 }}>{metrics.elevenlabs.tier} Plan</span>
                 </div>
                 <p style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--foreground)' }}>
-                  {(metrics.elevenlabs.character_count || 0).toLocaleString('en-US', { timeZone: 'America/New_York' })} <span style={{ fontSize: '1rem', fontWeight: 400, color: 'hsl(var(--muted-foreground))' }}>/ {(metrics.elevenlabs.character_limit || 0).toLocaleString('en-US', { timeZone: 'America/New_York' })} chars</span>
+                  {(metrics.elevenlabs.character_count || 0).toLocaleString()} <span style={{ fontSize: '1rem', fontWeight: 400, color: 'hsl(var(--muted-foreground))' }}>/ {(metrics.elevenlabs.character_limit || 0).toLocaleString()} chars</span>
                 </p>
                 <div style={{ marginTop: '0.75rem', height: '6px', background: 'hsl(var(--border))', borderRadius: '4px', overflow: 'hidden' }}>
                   <div style={{ 

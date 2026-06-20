@@ -450,7 +450,7 @@ export const DashboardPage = () => {
         <div className="dashboard-kpi-row">
           <KpiCard
             label="Calls This Month"
-            value={metrics.totalCallsThisMonth.toLocaleString('en-US', { timeZone: 'America/New_York' })}
+            value={metrics.totalCallsThisMonth.toLocaleString()}
             loading={loading}
           />
           <KpiCard
@@ -500,7 +500,7 @@ export const DashboardPage = () => {
                     />
                   </div>
                   <span style={{ width: '90px', textAlign: 'right', fontWeight: 600, fontSize: '0.9rem' }}>
-                    {stage.value.toLocaleString('en-US', { timeZone: 'America/New_York' })} <span className="text-muted" style={{ fontWeight: 400 }}>({pct}%)</span>
+                    {stage.value.toLocaleString()} <span className="text-muted" style={{ fontWeight: 400 }}>({pct}%)</span>
                   </span>
                 </div>
               );

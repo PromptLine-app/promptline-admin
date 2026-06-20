@@ -531,7 +531,7 @@ export const BusinessDetailPage = () => {
 
       <div className="dashboard-kpi-row" style={{ marginTop: '0.5rem' }}>
         <KpiCard label="Net Revenue Collected" value={formatUsd(business.revenue_cents || 0)} variant="success" />
-        <KpiCard label="Total Calls Answered" value={(business.call_count || 0).toLocaleString('en-US', { timeZone: 'America/New_York' })} />
+        <KpiCard label="Total Calls Answered" value={(business.call_count || 0).toLocaleString()} />
         <KpiCard label="Member Since" value={new Date(business.created_at).toLocaleDateString()} />
       </div>
 

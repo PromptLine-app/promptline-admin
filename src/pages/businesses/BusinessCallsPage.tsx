@@ -162,11 +162,11 @@ export const BusinessCallsPage = () => {
   return (
     <BusinessSubLayout tenantId={id!}>
       <div className="dashboard-kpi-row">
-        <KpiCard label="Total Calls" value={metrics.totalCount.toLocaleString('en-US', { timeZone: 'America/New_York' })} loading={loading} />
-        <KpiCard label="Completed Calls" value={metrics.completedCount.toLocaleString('en-US', { timeZone: 'America/New_York' })} variant="success" loading={loading} />
+        <KpiCard label="Total Calls" value={metrics.totalCount.toLocaleString()} loading={loading} />
+        <KpiCard label="Completed Calls" value={metrics.completedCount.toLocaleString()} variant="success" loading={loading} />
         <KpiCard
           label="Failed / No-Answer"
-          value={metrics.failedCount.toLocaleString('en-US', { timeZone: 'America/New_York' })}
+          value={metrics.failedCount.toLocaleString()}
           variant={metrics.failedCount > 0 ? 'destructive' : 'default'}
           loading={loading}
         />
