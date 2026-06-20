@@ -156,7 +156,7 @@ export const BusinessNotesPage = () => {
                     </AdminOnly>
                   </div>
                   <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>
-                    {n.author_name || 'Unknown'} · {new Date(n.created_at).toLocaleString()}
+                    {n.author_name || 'Unknown'} · {new Date(n.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' })}
                   </p>
                 </div>
               ))}

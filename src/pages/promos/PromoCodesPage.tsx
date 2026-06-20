@@ -118,12 +118,12 @@ export const PromoCodesPage = () => {
     {
       header: 'Used At',
       id: 'used_at',
-      cell: (row) => row.used_at ? new Date(row.used_at).toLocaleString() : '-',
+      cell: (row) => row.used_at ? new Date(row.used_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '-',
     },
     {
       header: 'Created At',
       id: 'created_at',
-      cell: (row) => new Date(row.created_at).toLocaleString(),
+      cell: (row) => new Date(row.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }),
     },
   ];
 

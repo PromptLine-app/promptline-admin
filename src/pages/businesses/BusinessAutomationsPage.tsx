@@ -100,7 +100,7 @@ export const BusinessAutomationsPage = () => {
   }, [fetchData]);
 
   const eventColumns: ColumnDef<AutomationEvent>[] = [
-    { header: 'When', id: 'created_at', cell: (r) => new Date(r.created_at).toLocaleString() },
+    { header: 'When', id: 'created_at', cell: (r) => new Date(r.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) },
     {
       header: 'Type',
       id: 'kind',
@@ -114,7 +114,7 @@ export const BusinessAutomationsPage = () => {
   ];
 
   const deliveryColumns: ColumnDef<Delivery>[] = [
-    { header: 'When', id: 'created_at', cell: (r) => new Date(r.created_at).toLocaleString() },
+    { header: 'When', id: 'created_at', cell: (r) => new Date(r.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) },
     { header: 'Event', id: 'event_type', cell: (r) => r.event_type },
     {
       header: 'Result',

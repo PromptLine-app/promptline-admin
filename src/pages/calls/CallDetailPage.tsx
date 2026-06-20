@@ -115,7 +115,7 @@ export const CallDetailPage = () => {
 
       <PageHeader
         title="Call Detail"
-        subtitle={`${new Date(call.created_at).toLocaleString()}`}
+        subtitle={`${new Date(call.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' })}`}
         actions={
           elevenUrl ? (
             <a className="btn btn--secondary" href={elevenUrl} target="_blank" rel="noreferrer">
@@ -163,8 +163,8 @@ export const CallDetailPage = () => {
             </Row>
             <Row label="Channel">{call.channel || '—'}</Row>
             <Row label="Type">{call.type || '—'}</Row>
-            <Row label="Started">{call.started_at ? new Date(call.started_at).toLocaleString() : '—'}</Row>
-            <Row label="Ended">{call.ended_at ? new Date(call.ended_at).toLocaleString() : '—'}</Row>
+            <Row label="Started">{call.started_at ? new Date(call.started_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '—'}</Row>
+            <Row label="Ended">{call.ended_at ? new Date(call.ended_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '—'}</Row>
             <Row label="Contact ID">
               {call.contact_id ? (
                 <span style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{call.contact_id}</span>

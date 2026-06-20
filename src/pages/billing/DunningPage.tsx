@@ -229,7 +229,7 @@ export const DunningPage = () => {
     {
       header: 'Last Failed',
       id: 'last_failed_at',
-      cell: (row) => (row.last_failed_at ? new Date(row.last_failed_at).toLocaleString() : '—'),
+      cell: (row) => (row.last_failed_at ? new Date(row.last_failed_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '—'),
     },
     {
       header: 'Last Error',

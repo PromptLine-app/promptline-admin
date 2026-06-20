@@ -48,7 +48,7 @@ export const BusinessLogsPage = () => {
     {
       header: 'Timestamp',
       id: 'created_at',
-      cell: (row) => new Date(row.created_at).toLocaleString(),
+      cell: (row) => new Date(row.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }),
     },
     {
       header: 'Level',
@@ -139,7 +139,7 @@ export const BusinessLogsPage = () => {
                 <h2 style={{ fontSize: '1.25rem', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <FiAlertCircle style={{ color: 'var(--error-color)' }} /> Log Details
                 </h2>
-                <p className="text-muted">Captured on {new Date(selectedLog.created_at).toLocaleString()}</p>
+                <p className="text-muted">Captured on {new Date(selectedLog.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' })}</p>
               </div>
               <button onClick={() => setSelectedLog(null)} className="btn btn--secondary btn--sm" style={{ padding: '0.4rem' }}>
                 <FiX />

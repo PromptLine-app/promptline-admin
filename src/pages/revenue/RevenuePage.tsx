@@ -124,7 +124,7 @@ export const RevenuePage = () => {
     {
       header: 'Date',
       id: 'created_at',
-      cell: (row) => new Date(row.created_at).toLocaleString(),
+      cell: (row) => new Date(row.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }),
     },
     {
       header: 'Business',

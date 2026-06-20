@@ -345,7 +345,7 @@ export const DashboardPage = () => {
   ];
 
   const leadColumns: ColumnDef<ContactLead>[] = [
-    { header: 'Received', id: 'created_at', cell: (row) => new Date(row.created_at).toLocaleString() },
+    { header: 'Received', id: 'created_at', cell: (row) => new Date(row.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) },
     { header: 'Name', id: 'full_name', cell: (row) => row.full_name || '—' },
     { header: 'Business', id: 'business_name', cell: (row) => row.business_name || '—' },
     {
@@ -450,7 +450,7 @@ export const DashboardPage = () => {
         <div className="dashboard-kpi-row">
           <KpiCard
             label="Calls This Month"
-            value={metrics.totalCallsThisMonth.toLocaleString()}
+            value={metrics.totalCallsThisMonth.toLocaleString('en-US', { timeZone: 'America/New_York' })}
             loading={loading}
           />
           <KpiCard
@@ -500,7 +500,7 @@ export const DashboardPage = () => {
                     />
                   </div>
                   <span style={{ width: '90px', textAlign: 'right', fontWeight: 600, fontSize: '0.9rem' }}>
-                    {stage.value.toLocaleString()} <span className="text-muted" style={{ fontWeight: 400 }}>({pct}%)</span>
+                    {stage.value.toLocaleString('en-US', { timeZone: 'America/New_York' })} <span className="text-muted" style={{ fontWeight: 400 }}>({pct}%)</span>
                   </span>
                 </div>
               );

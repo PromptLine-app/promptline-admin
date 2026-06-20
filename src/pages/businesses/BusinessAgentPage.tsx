@@ -233,7 +233,7 @@ export const BusinessAgentPage = () => {
               </span>
               {voice?.updated_at && (
                 <span className="text-muted">
-                  Config updated {new Date(voice.updated_at).toLocaleString()}
+                  Config updated {new Date(voice.updated_at).toLocaleString('en-US', { timeZone: 'America/New_York' })}
                 </span>
               )}
             </div>

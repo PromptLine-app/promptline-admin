@@ -125,7 +125,7 @@ export const BusinessCallsPage = () => {
     {
       header: 'Date',
       id: 'created_at',
-      cell: (row) => new Date(row.created_at).toLocaleString(),
+      cell: (row) => new Date(row.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }),
     },
     {
       header: 'Direction',
@@ -162,11 +162,11 @@ export const BusinessCallsPage = () => {
   return (
     <BusinessSubLayout tenantId={id!}>
       <div className="dashboard-kpi-row">
-        <KpiCard label="Total Calls" value={metrics.totalCount.toLocaleString()} loading={loading} />
-        <KpiCard label="Completed Calls" value={metrics.completedCount.toLocaleString()} variant="success" loading={loading} />
+        <KpiCard label="Total Calls" value={metrics.totalCount.toLocaleString('en-US', { timeZone: 'America/New_York' })} loading={loading} />
+        <KpiCard label="Completed Calls" value={metrics.completedCount.toLocaleString('en-US', { timeZone: 'America/New_York' })} variant="success" loading={loading} />
         <KpiCard
           label="Failed / No-Answer"
-          value={metrics.failedCount.toLocaleString()}
+          value={metrics.failedCount.toLocaleString('en-US', { timeZone: 'America/New_York' })}
           variant={metrics.failedCount > 0 ? 'destructive' : 'default'}
           loading={loading}
         />

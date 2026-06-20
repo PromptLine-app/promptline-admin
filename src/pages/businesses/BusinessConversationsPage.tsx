@@ -150,7 +150,7 @@ export const BusinessConversationsPage = () => {
                     {last ? `${last.direction === 'outbound' ? 'You: ' : ''}${last.body}` : 'No messages'}
                   </p>
                   <p className="text-muted" style={{ fontSize: '0.7rem', marginTop: '0.2rem' }}>
-                    {last?.sent_at ? new Date(last.sent_at).toLocaleString() : ''} · {msgs.length} msg
+                    {last?.sent_at ? new Date(last.sent_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) : ''} · {msgs.length} msg
                   </p>
                 </button>
               );
@@ -189,7 +189,7 @@ export const BusinessConversationsPage = () => {
                         }}
                       >
                         {m.message_type === 'ai' ? 'AI · ' : ''}
-                        {m.sent_at ? new Date(m.sent_at).toLocaleString() : ''}
+                        {m.sent_at ? new Date(m.sent_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) : ''}
                         {m.status ? ` · ${m.status}` : ''}
                       </p>
                     </div>
