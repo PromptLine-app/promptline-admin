@@ -25,6 +25,8 @@ import {
   FiPlusCircle,
   FiRotateCcw,
   FiBell,
+  FiTrash2,
+  FiRefreshCw,
 } from 'react-icons/fi';
 
 const PAST_DUE_STATUSES = ['past_due', 'suspended'];
@@ -46,6 +48,7 @@ export const BusinessDetailPage = () => {
 
   // Dialogs & Modals
   const [showStatusConfirm, setShowStatusConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showRetryConfirm, setShowRetryConfirm] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -158,6 +161,46 @@ export const BusinessDetailPage = () => {
       reportError(error, { where: 'BusinessDetailPage.handleToggleStatus' });
       console.error('Error toggling status:', error);
       toast('Failed to update agent status', 'error');
+    }
+  };
+
+  const handleDeletePermanently = async () => {
+    if (!business || !id) return;
+    try {
+      setBusy(true);
+      const { error } = await supabase.from('tenants').delete().eq('id', id);
+      if (error) throw error;
+      await logActivity('delete_tenant_permanently', { tenant_id: id, company_name: business.company_name });
+      toast(`Business permanently deleted.`);
+      setShowDeleteConfirm(false);
+      navigate('/businesses');
+    } catch (error) {
+      reportError(error, { where: 'BusinessDetailPage.handleDeletePermanently' });
+      console.error('Error deleting business permanently:', error);
+      toast('Failed to delete business', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleProvisionNewNumber = async () => {
+    if (!business || !id) return;
+    try {
+      setBusy(true);
+      const { error, data } = await supabase.functions.invoke("agents", {
+        body: { tenantId: id, mode: 'onboard' }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await logActivity('provision_new_number', { tenant_id: id });
+      toast('New number provisioned successfully.');
+      fetchDetails();
+    } catch (error: any) {
+      reportError(error, { where: 'BusinessDetailPage.handleProvisionNewNumber' });
+      console.error('Error provisioning new number:', error);
+      toast(error?.message || 'Failed to provision new number', 'error');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -465,11 +508,19 @@ export const BusinessDetailPage = () => {
                 <FiEdit2 /> Edit Details
               </button>
               <button
-                className={`btn ${business.is_deleted ? 'btn--primary' : 'btn--destructive'}`}
+                className={`btn ${business.is_deleted ? 'btn--primary' : 'btn--warning'}`}
                 onClick={() => setShowStatusConfirm(true)}
               >
                 {business.is_deleted ? <FiPhoneCall /> : <FiPhoneOff />}
                 {business.is_deleted ? 'Enable Agent' : 'Disable Agent'}
+              </button>
+              {!business.twillio_phone && (
+                <button className="btn btn--secondary" onClick={handleProvisionNewNumber} disabled={busy}>
+                  <FiRefreshCw /> Provision New Number
+                </button>
+              )}
+              <button className="btn btn--destructive" onClick={() => setShowDeleteConfirm(true)} disabled={busy}>
+                <FiTrash2 /> Delete Permanently
               </button>
             </div>
           </AdminOnly>
@@ -625,6 +676,16 @@ export const BusinessDetailPage = () => {
         confirmLabel="Yes, Charge Now"
         onConfirm={handleRetryCharge}
         onCancel={() => setShowRetryConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete Permanently"
+        message={`Are you sure you want to permanently delete the AI agent for ${business.company_name}? This action cannot be undone and will delete all call logs.`}
+        isDestructive={true}
+        confirmLabel="Yes, Delete Permanently"
+        onConfirm={handleDeletePermanently}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
 
       {/* Change Plan Modal */}
