@@ -33,11 +33,22 @@ export const BusinessListPage = () => {
 
       if (billingError) throw billingError;
 
-      // 3. Combine them
+      // 3. Fetch phone numbers from operational profiles (twillio_phone lives here, not in tenants)
+      const { data: opsData } = await supabase
+        .from('tenant_operational_profiles')
+        .select('tenant_id, twillio_phone');
+
+      const opsMap: Record<string, string | null> = {};
+      (opsData || []).forEach((o) => {
+        opsMap[o.tenant_id] = o.twillio_phone;
+      });
+
+      // 4. Combine them
       const combined: BusinessRow[] = (tenantsData || []).map((t) => {
         const billing = billingData?.find((b) => b.tenant_id === t.id);
         return {
           ...t,
+          twillio_phone: opsMap[t.id] ?? t.twillio_phone ?? null,
           billing,
         };
       });

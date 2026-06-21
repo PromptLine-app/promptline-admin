@@ -104,6 +104,13 @@ export const BusinessDetailPage = () => {
         .eq('tenant_id', id)
         .order('created_at', { ascending: false });
 
+      // Fetch phone number from operational profile (stored separately from tenants table)
+      const { data: opsData } = await supabase
+        .from('tenant_operational_profiles')
+        .select('twillio_phone')
+        .eq('tenant_id', id)
+        .maybeSingle();
+
       const allCharges = (chargeRows || []) as TenantBillingCharge[];
       setCharges(allCharges);
 
@@ -113,6 +120,7 @@ export const BusinessDetailPage = () => {
 
       setBusiness({
         ...tenantData,
+        twillio_phone: opsData?.twillio_phone ?? tenantData.twillio_phone ?? null,
         billing: billingData,
         plan: planData,
         call_count: callCount || 0,
