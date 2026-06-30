@@ -14,6 +14,7 @@ import { useRealtime } from '@/hooks/useRealtime';
 import { PLAN_OPTIONS, formatUsd } from '@/types/domain';
 import type { BusinessRow, TenantBillingCharge } from '@/types/domain';
 import { sendPaymentReminder } from '@/lib/billingReminder';
+import { applyPaymentBypass, revokePaymentBypass } from '@/lib/billingOverride';
 import { reportError } from '@/lib/sentry';
 import {
   FiArrowLeft,
@@ -27,6 +28,7 @@ import {
   FiBell,
   FiTrash2,
   FiRefreshCw,
+  FiUnlock,
 } from 'react-icons/fi';
 
 const PAST_DUE_STATUSES = ['past_due', 'suspended'];
@@ -54,8 +56,13 @@ export const BusinessDetailPage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCompModal, setShowCompModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showBypassModal, setShowBypassModal] = useState(false);
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
 
   const [selectedPlan, setSelectedPlan] = useState<string>('');
+
+  // Payment bypass form
+  const [bypassReason, setBypassReason] = useState('');
 
   // Edit form
   const [editName, setEditName] = useState('');
@@ -437,6 +444,54 @@ export const BusinessDetailPage = () => {
     }
   };
 
+  // Bypass payment: activate the account without a card on file (e.g. when card
+  // vaulting fails on the customer's side with a PayPal 3-D Secure contingency).
+  // The edge function verifies admin access and reuses the promo "active, no
+  // card, never auto-charged" state. Revoke sends them back to 'pending'.
+  const handleBypassPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+    if (!bypassReason.trim()) {
+      toast('Enter a reason for the bypass.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      await applyPaymentBypass({
+        tenantId: id,
+        reason: bypassReason,
+        adminUserId: adminUser?.id ?? null,
+      });
+      toast('Payment bypassed — account activated without a card.');
+      setShowBypassModal(false);
+      setBypassReason('');
+      fetchDetails();
+    } catch (error) {
+      reportError(error, { where: 'BusinessDetailPage.handleBypassPayment' });
+      console.error('Error bypassing payment:', error);
+      toast(error instanceof Error ? error.message : 'Failed to bypass payment', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRevokeBypass = async () => {
+    if (!id) return;
+    setBusy(true);
+    try {
+      await revokePaymentBypass({ tenantId: id, adminUserId: adminUser?.id ?? null });
+      toast('Payment bypass revoked — the customer must add a card.');
+      setShowRevokeConfirm(false);
+      fetchDetails();
+    } catch (error) {
+      reportError(error, { where: 'BusinessDetailPage.handleRevokeBypass' });
+      console.error('Error revoking payment bypass:', error);
+      toast(error instanceof Error ? error.message : 'Failed to revoke bypass', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const chargeColumns: ColumnDef<TenantBillingCharge>[] = [
     {
       header: 'Date',
@@ -495,6 +550,10 @@ export const BusinessDetailPage = () => {
   }
 
   const isPastDue = PAST_DUE_STATUSES.includes(business.billing?.status || '');
+  // A payment bypass reuses the promo "active, no card" state. (Indistinguishable
+  // from a real promo redemption by design — the audit log records which it was.)
+  const isBypassed =
+    business.billing?.payment_method === 'promo' && business.billing?.status === 'active';
 
   return (
     <div className="page-content">
@@ -561,6 +620,8 @@ export const BusinessDetailPage = () => {
               <span>
                 {business.is_deleted ? (
                   <StatusBadge status="canceled" label="Disabled" />
+                ) : isBypassed ? (
+                  <StatusBadge status="active" label="Active · Payment bypassed" />
                 ) : (
                   <StatusBadge status={business.billing?.status || 'pending'} />
                 )}
@@ -596,6 +657,28 @@ export const BusinessDetailPage = () => {
               <button className="btn btn--secondary btn--sm" onClick={() => setShowCompModal(true)}>
                 <FiPlusCircle /> Grant Calls
               </button>
+              {isBypassed ? (
+                <button
+                  className="btn btn--warning btn--sm"
+                  onClick={() => setShowRevokeConfirm(true)}
+                  disabled={busy}
+                  title="Remove the payment bypass and require a card"
+                >
+                  <FiUnlock /> Revoke Bypass
+                </button>
+              ) : (
+                <button
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => {
+                    setBypassReason('');
+                    setShowBypassModal(true);
+                  }}
+                  disabled={busy}
+                  title="Activate this account without a card on file"
+                >
+                  <FiUnlock /> Bypass Payment
+                </button>
+              )}
               <button
                 className="btn btn--secondary btn--sm"
                 onClick={openRefundModal}
@@ -684,6 +767,16 @@ export const BusinessDetailPage = () => {
         confirmLabel="Yes, Charge Now"
         onConfirm={handleRetryCharge}
         onCancel={() => setShowRetryConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showRevokeConfirm}
+        title="Revoke Payment Bypass"
+        message={`Remove the payment bypass for ${business.company_name}? Their account returns to "pending" and the customer must add a working card before the assistant stays active.`}
+        isDestructive={true}
+        confirmLabel="Yes, Revoke Bypass"
+        onConfirm={handleRevokeBypass}
+        onCancel={() => setShowRevokeConfirm(false)}
       />
 
       <ConfirmDialog
@@ -817,6 +910,40 @@ export const BusinessDetailPage = () => {
                 </button>
                 <button type="submit" className="btn btn--primary" disabled={busy}>
                   {busy ? 'Granting...' : 'Grant Calls'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bypass Payment Modal */}
+      {showBypassModal && (
+        <div className="dialog-overlay" onClick={() => setShowBypassModal(false)}>
+          <div className="dialog-panel" onClick={(e) => e.stopPropagation()}>
+            <h3>Bypass Payment</h3>
+            <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
+              Activate <strong>{business.company_name}</strong> without a card on file. Use this when card
+              vaulting fails on the customer's side (e.g. a PayPal 3-D Secure error). The account becomes
+              active and is never auto-charged until you revoke the bypass.
+            </p>
+            <form onSubmit={handleBypassPayment}>
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Reason (required)</label>
+                <input
+                  className="form-input"
+                  value={bypassReason}
+                  onChange={(e) => setBypassReason(e.target.value)}
+                  placeholder="e.g. PayPal 3DS contingency — issuer won't clear"
+                  autoFocus
+                />
+              </div>
+              <div className="dialog-actions">
+                <button type="button" className="btn btn--ghost" onClick={() => setShowBypassModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn--primary" disabled={busy || !bypassReason.trim()}>
+                  {busy ? 'Applying…' : 'Bypass Payment'}
                 </button>
               </div>
             </form>
