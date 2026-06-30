@@ -44,7 +44,9 @@ export const RevenuePage = () => {
           .select('id, company_name')
           .in('id', tenantIds);
         const map = new Map<string, string | null>();
-        (tenants || []).forEach((t: any) => map.set(t.id, t.company_name));
+        (tenants || []).forEach((t: { id: string; company_name: string | null }) =>
+          map.set(t.id, t.company_name),
+        );
         setNames(map);
       }
     } catch (error) {
@@ -58,6 +60,7 @@ export const RevenuePage = () => {
   const nameFor = (tenantId: string) => names.get(tenantId) || null;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchCharges();
   }, []);
 
@@ -82,6 +85,7 @@ export const RevenuePage = () => {
       }
       return true;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally limited to avoid refetch loop
   }, [charges, names, search, statusFilter, kindFilter, fromDate, toDate]);
 
   const metrics = useMemo(() => {

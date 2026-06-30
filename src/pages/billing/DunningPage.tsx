@@ -63,12 +63,14 @@ export const DunningPage = () => {
       ]);
 
       const nameByTenant = new Map<string, string | null>();
-      (tenants || []).forEach((t: any) => nameByTenant.set(t.id, t.company_name));
+      (tenants || []).forEach((t: { id: string; company_name: string | null }) =>
+        nameByTenant.set(t.id, t.company_name),
+      );
 
       // Keep only the most recent failed charge per tenant (rows arrive desc).
       const latestFailure = new Map<string, Partial<TenantBillingCharge>>();
-      (failedCharges || []).forEach((c: any) => {
-        if (!latestFailure.has(c.tenant_id)) latestFailure.set(c.tenant_id, c);
+      (failedCharges || []).forEach((c: Partial<TenantBillingCharge>) => {
+        if (c.tenant_id && !latestFailure.has(c.tenant_id)) latestFailure.set(c.tenant_id, c);
       });
 
       setRows(
@@ -92,6 +94,7 @@ export const DunningPage = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchDunning();
   }, [fetchDunning]);
 
@@ -147,19 +150,20 @@ export const DunningPage = () => {
       }
       
       fetchDunning();
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'DunningPage.handleRetry' });
       console.error('Retry failed:', err);
-      
+
+      const message = err instanceof Error ? err.message : String(err);
       await supabase.from('system_error_logs').insert({
         category: 'billing',
         level: 'error',
         tenant_id: row.tenant_id,
-        error_message: err?.message || String(err),
+        error_message: message,
         details: { context: 'Manual charge retry exception' }
       });
-      
-      toast(err?.message || 'Failed to retry payment', 'error');
+
+      toast(message || 'Failed to retry payment', 'error');
     } finally {
       setRetrying(null);
     }
@@ -176,10 +180,10 @@ export const DunningPage = () => {
         adminUserId: adminUser?.id ?? null,
       });
       toast(`Reminder emailed to ${row.company_name || row.tenant_id}.`);
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'DunningPage.handleReminder' });
       console.error('Reminder failed:', err);
-      toast(err?.message || 'Failed to send reminder', 'error');
+      toast(err instanceof Error ? err.message : 'Failed to send reminder', 'error');
     } finally {
       setReminding(null);
     }

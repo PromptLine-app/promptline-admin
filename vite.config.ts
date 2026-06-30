@@ -35,14 +35,14 @@ function devApi(): Plugin {
         let raw = '';
         req.setEncoding('utf8');
         for await (const chunk of req) raw += chunk;
-        (req as any).body = raw;
+        (req as unknown as { body: string }).body = raw;
 
         // Shim the Vercel-style response helpers onto Node's ServerResponse.
-        (res as any).status = (code: number) => {
+        (res as unknown as { status: (code: number) => typeof res }).status = (code: number) => {
           res.statusCode = code;
           return res;
         };
-        (res as any).json = (obj: unknown) => {
+        (res as unknown as { json: (obj: unknown) => void }).json = (obj: unknown) => {
           if (!res.getHeader('Content-Type')) {
             res.setHeader('Content-Type', 'application/json');
           }

@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '@/config/supabase';
 
 type UseRealtimeOptions = {
   table: string;
   event: 'INSERT' | 'UPDATE' | 'DELETE' | '*';
-  onUpdate: (payload: any) => void;
+  onUpdate: (payload: RealtimePostgresChangesPayload<{ [key: string]: unknown }>) => void;
   schema?: string;
 };
 

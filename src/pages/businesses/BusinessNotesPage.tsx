@@ -56,6 +56,7 @@ export const BusinessNotesPage = () => {
   }, [id, toast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchNotes();
   }, [fetchNotes]);
 
@@ -74,10 +75,10 @@ export const BusinessNotesPage = () => {
       setDraft('');
       toast('Note added.');
       fetchNotes();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessNotesPage.handleAdd' });
       console.error('Error adding note:', error);
-      toast(error?.message || 'Failed to add note', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to add note', 'error');
     } finally {
       setSaving(false);
     }
@@ -89,10 +90,10 @@ export const BusinessNotesPage = () => {
       if (error) throw error;
       toast('Note deleted.');
       fetchNotes();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessNotesPage.handleDelete' });
       console.error('Error deleting note:', error);
-      toast(error?.message || 'Failed to delete note', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to delete note', 'error');
     }
   };
 

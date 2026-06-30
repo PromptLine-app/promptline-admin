@@ -38,6 +38,7 @@ export const PromoCodesPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchPromos();
   }, []);
 
@@ -67,15 +68,15 @@ export const PromoCodesPage = () => {
 
       toast(`Successfully generated new promo code: ${code}`);
       fetchPromos();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'PromoCodesPage.handleGeneratePromo' });
       console.error('Error generating promo code:', error);
-      
+
       // Push error to system logs
       await supabase.from('system_error_logs').insert({
         category: 'promo',
         level: 'error',
-        error_message: error.message || String(error),
+        error_message: (error instanceof Error ? error.message : '') || String(error),
         details: { context: 'Generating new promo code', discountType, discountValue }
       });
 

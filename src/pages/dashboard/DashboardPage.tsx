@@ -249,13 +249,19 @@ export const DashboardPage = () => {
         .eq('is_deleted', false)
         .order('created_at', { ascending: false });
 
-      const noPlanRows: NoPlanTenant[] = (tenantList || [])
-        .filter((t: any) => {
+      type TenantListRow = {
+        id: string;
+        company_name: string | null;
+        created_at: string;
+        onboarded: boolean | null;
+      };
+      const noPlanRows: NoPlanTenant[] = ((tenantList || []) as TenantListRow[])
+        .filter((t) => {
           const info = planInfo.get(t.id);
           const hasPlan = !!info && (!!info.plan_tier || billedStates.includes(info.status));
           return !hasPlan;
         })
-        .map((t: any) => ({
+        .map((t) => ({
           id: t.id,
           company_name: t.company_name,
           created_at: t.created_at,
@@ -301,6 +307,7 @@ export const DashboardPage = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchMetrics();
   }, [fetchMetrics]);
 

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run build && npm run test"
+    "typecheck": "tsc -b",
+    "verify": "npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
     "@sentry/react": "^10.58.0",

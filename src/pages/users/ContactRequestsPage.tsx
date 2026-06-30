@@ -101,6 +101,7 @@ export const ContactRequestsPage = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchContacts();
   }, [fetchContacts]);
 
@@ -163,7 +164,7 @@ export const ContactRequestsPage = () => {
       await fetchContacts();
       closeModal();
       toast(`Email sent to ${selectedContact.business_email}.`);
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'ContactRequestsPage.handleSendEmail' });
       console.error('Error sending email:', error);
       const msg = error instanceof Error ? error.message : JSON.stringify(error);
@@ -192,7 +193,7 @@ export const ContactRequestsPage = () => {
       await fetchContacts();
       closeModal();
       toast('Notes and status updated successfully.');
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'ContactRequestsPage.handleSaveNotes' });
       console.error('Error saving notes:', error);
       toast('Failed to save notes.', 'error');

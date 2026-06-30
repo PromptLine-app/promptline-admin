@@ -145,6 +145,7 @@ export const BusinessDetailPage = () => {
   }, [id, toast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchDetails();
   }, [fetchDetails]);
 
@@ -153,7 +154,7 @@ export const BusinessDetailPage = () => {
   useRealtime({ table: 'tenant_plan', event: '*', onUpdate: fetchDetails });
   useRealtime({ table: 'tenant_billing_charges', event: '*', onUpdate: fetchDetails });
 
-  const logActivity = async (action: string, details: any) => {
+  const logActivity = async (action: string, details: Record<string, unknown>) => {
     if (!adminUser) return;
     await supabase.from('admin_activity_log').insert({
       admin_user_id: adminUser.id,
@@ -210,10 +211,10 @@ export const BusinessDetailPage = () => {
       await logActivity('provision_new_number', { tenant_id: id });
       toast('New number provisioned successfully.');
       fetchDetails();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessDetailPage.handleProvisionNewNumber' });
       console.error('Error provisioning new number:', error);
-      toast(error?.message || 'Failed to provision new number', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to provision new number', 'error');
     } finally {
       setBusy(false);
     }
@@ -280,10 +281,10 @@ export const BusinessDetailPage = () => {
       });
       toast('Payment reminder emailed to the customer.');
       fetchDetails();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessDetailPage.handleSendReminder' });
       console.error('Error sending reminder:', error);
-      toast(error?.message || 'Failed to send reminder', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to send reminder', 'error');
     } finally {
       setSendingReminder(false);
     }
@@ -329,10 +330,10 @@ export const BusinessDetailPage = () => {
       toast('Business details updated.');
       setShowEditModal(false);
       fetchDetails();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessDetailPage.handleSaveEdit' });
       console.error('Error saving edit:', error);
-      toast(error?.message || 'Failed to update business', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to update business', 'error');
     } finally {
       setBusy(false);
     }
@@ -366,10 +367,10 @@ export const BusinessDetailPage = () => {
       setCompCalls('');
       setCompJunk('');
       fetchDetails();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessDetailPage.handleComp' });
       console.error('Error granting calls:', error);
-      toast(error?.message || 'Failed to grant calls', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to grant calls', 'error');
     } finally {
       setBusy(false);
     }
@@ -408,10 +409,10 @@ export const BusinessDetailPage = () => {
       toast(`Refunded ${formatUsd(data?.refundedCents || amt || charge.amount_cents)}.`);
       setShowRefundModal(false);
       fetchDetails();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessDetailPage.handleRefund' });
       console.error('Error issuing refund:', error);
-      toast(error?.message || 'Failed to issue refund', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to issue refund', 'error');
     } finally {
       setBusy(false);
     }
@@ -435,10 +436,10 @@ export const BusinessDetailPage = () => {
       }
       await logActivity('retry_charge', { result: data?.success ? 'succeeded' : 'failed', status: data?.status });
       fetchDetails();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'BusinessDetailPage.handleRetryCharge' });
       console.error('Error retrying charge:', error);
-      toast(error?.message || 'Failed to charge card', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to charge card', 'error');
     } finally {
       setBusy(false);
     }

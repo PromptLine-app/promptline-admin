@@ -4,7 +4,6 @@ import {
   FiCpu,
   FiDatabase,
   FiShield,
-  FiActivity,
 } from 'react-icons/fi';
 import './navigation.css';
 

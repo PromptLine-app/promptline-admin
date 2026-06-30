@@ -57,7 +57,7 @@ export const BusinessConversationsPage = () => {
           .select('id, first_name, last_name, phone')
           .in('id', contactIds);
         const map = new Map<string, Contact>();
-        (contactRows || []).forEach((c: any) => map.set(c.id, c));
+        (contactRows || []).forEach((c: Contact) => map.set(c.id, c));
         setContacts(map);
       }
 
@@ -79,6 +79,7 @@ export const BusinessConversationsPage = () => {
   }, [id, toast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchData();
   }, [fetchData]);
 

@@ -96,6 +96,7 @@ export const BusinessAutomationsPage = () => {
   }, [id, toast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchData();
   }, [fetchData]);
 

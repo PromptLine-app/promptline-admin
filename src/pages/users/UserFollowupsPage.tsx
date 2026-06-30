@@ -103,6 +103,7 @@ export const UserFollowupsPage = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchUsers();
   }, [fetchUsers]);
 
@@ -172,7 +173,7 @@ export const UserFollowupsPage = () => {
       await fetchUsers();
       closeModal();
       toast(`Email sent to ${selectedUser.email}.`);
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'UserFollowupsPage.handleSendEmail' });
       console.error('Error sending email:', error);
       const msg = error instanceof Error ? error.message : JSON.stringify(error);

@@ -39,7 +39,9 @@ export const BusinessLogsPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally limited to avoid refetch loop
   }, [id]);
 
   useRealtime({ table: 'system_error_logs', event: '*', onUpdate: fetchLogs });

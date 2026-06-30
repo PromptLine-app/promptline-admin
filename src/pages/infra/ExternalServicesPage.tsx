@@ -12,7 +12,7 @@ interface InfraMetrics {
     balance?: string;
     currency?: string;
     error?: string;
-    alerts?: any[];
+    alerts?: unknown[];
   };
   openai: {
     status: ServiceStatus;
@@ -25,7 +25,7 @@ interface InfraMetrics {
     character_limit?: number;
     tier?: string;
     error?: string;
-    history?: any[];
+    history?: unknown[];
   };
   vercel?: {
     status: ServiceStatus;
@@ -35,7 +35,7 @@ interface InfraMetrics {
   };
   supabase?: {
     status: ServiceStatus;
-    services?: any;
+    services?: unknown;
     note?: string;
     error?: string;
   };
@@ -54,16 +54,17 @@ export const ExternalServicesPage = () => {
       console.log('Edge function response:', { data, error });
       if (error) throw error;
       setMetrics(data as InfraMetrics);
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'ExternalServicesPage.fetchMetrics' });
       console.error('Error fetching infra metrics:', error);
-      setFetchError(error.message || String(error));
+      setFetchError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchMetrics();
   }, []);
 
@@ -210,7 +211,7 @@ export const ExternalServicesPage = () => {
                   {metrics.vercel.total_projects} Projects Tracked
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  {metrics.vercel.projects?.map((p: any) => (
+                  {metrics.vercel.projects?.map((p) => (
                     <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem', background: 'rgba(0,0,0,0.1)', borderRadius: '4px' }}>
                       <span style={{ fontWeight: 500 }}>{p.name}</span>
                       <span style={{ color: p.readyState === 'READY' ? '#10b981' : p.readyState === 'ERROR' ? '#ef4444' : '#f59e0b' }}>

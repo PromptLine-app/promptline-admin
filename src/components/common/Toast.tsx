@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
+import { useState, createContext, useContext, ReactNode, useCallback } from 'react';
 import { FiX, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 
 type ToastType = 'success' | 'error';
@@ -53,6 +53,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- context/provider + hook colocated by design; fast-refresh only
 export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) {

@@ -46,10 +46,10 @@ export const BusinessTabs = ({ tenantId }: { tenantId: string }) => {
 
       window.open(action_link, '_blank', 'noopener,noreferrer');
       toast(`Opening customer view as ${email}…`);
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'BusinessTabs.handleOpenCustomerView' });
       console.error('Impersonation failed:', err);
-      toast(err?.message || 'Failed to open customer view', 'error');
+      toast((err instanceof Error ? err.message : '') || 'Failed to open customer view', 'error');
     } finally {
       setOpening(false);
     }

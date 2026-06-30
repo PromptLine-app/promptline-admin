@@ -118,6 +118,7 @@ export const BusinessAgentPage = () => {
   }, [id, toast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchAgent();
   }, [fetchAgent]);
 
@@ -130,10 +131,10 @@ export const BusinessAgentPage = () => {
       });
       if (error) throw error;
       setPromptPreview(data?.systemPrompt || '(No system prompt returned)');
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'BusinessAgentPage.handlePreview' });
       console.error('Prompt preview failed:', err);
-      toast(err?.message || 'Failed to preview prompt', 'error');
+      toast(err instanceof Error ? err.message : 'Failed to preview prompt', 'error');
     } finally {
       setPreviewing(false);
     }
@@ -162,10 +163,10 @@ export const BusinessAgentPage = () => {
         });
       }
       fetchAgent();
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'BusinessAgentPage.handleResync' });
       console.error('Agent re-sync failed:', err);
-      toast(err?.message || 'Failed to re-sync agent', 'error');
+      toast(err instanceof Error ? err.message : 'Failed to re-sync agent', 'error');
     } finally {
       setResyncing(false);
     }

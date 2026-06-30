@@ -94,6 +94,7 @@ export const HealthPage = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchHealth();
   }, [fetchHealth]);
 

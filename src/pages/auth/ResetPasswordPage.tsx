@@ -35,9 +35,9 @@ export const ResetPasswordPage = () => {
       
       setSuccess(true);
       setTimeout(() => navigate('/'), 2000);
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'ResetPasswordPage.handleReset' });
-      setError(err.message || 'Failed to update password. Your reset link may have expired.');
+      setError((err instanceof Error ? err.message : '') || 'Failed to update password. Your reset link may have expired.');
     } finally {
       setLoading(false);
     }

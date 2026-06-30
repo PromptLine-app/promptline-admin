@@ -4,7 +4,6 @@ import { supabase } from '@/config/supabase';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { KpiCard } from '@/components/common/KpiCard';
 import { useRealtime } from '@/hooks/useRealtime';
 import { reportError } from '@/lib/sentry';
 import type { BusinessRow } from '@/types/domain';
@@ -63,6 +62,7 @@ export const BusinessListPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchBusinesses();
   }, []);
 

@@ -47,7 +47,7 @@ export const ActivityLogPage = () => {
 
   const fetchSystemLogs = async () => {
     try {
-      let query = supabase
+      const query = supabase
         .from('system_error_logs')
         .select('*')
         .order('created_at', { ascending: false })
@@ -65,6 +65,7 @@ export const ActivityLogPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchAdminLogs();
     fetchSystemLogs();
   }, []);

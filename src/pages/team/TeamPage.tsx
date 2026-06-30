@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase, supabaseAuth } from '@/config/supabase';
+import { supabase } from '@/config/supabase';
 import { AdminOnly } from '@/auth/AdminOnly';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
@@ -41,6 +41,7 @@ export const TeamPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchTeam();
   }, []);
 
@@ -67,10 +68,10 @@ export const TeamPage = () => {
       setNewPassword('');
       setNewRole('admin');
       fetchTeam();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'TeamPage.handleAddMember' });
       console.error('Error adding member:', error);
-      toast(error.message || 'Failed to add team member.', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to add team member.', 'error');
     } finally {
       setAddLoading(false);
     }
@@ -89,10 +90,10 @@ export const TeamPage = () => {
 
       toast(`Successfully removed ${user.full_name}.`);
       fetchTeam();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'TeamPage.handleRemoveMember' });
       console.error('Error removing member:', error);
-      toast(error.message || 'Failed to remove team member.', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to remove team member.', 'error');
     }
   };
 
@@ -106,10 +107,10 @@ export const TeamPage = () => {
       if (error) throw error;
       toast(`Changed ${user.full_name}'s role to ${newRole}.`);
       fetchTeam();
-    } catch (error: any) {
+    } catch (error) {
       reportError(error, { where: 'TeamPage.handleChangeRole' });
       console.error('Error changing role:', error);
-      toast(error.message || 'Failed to update role.', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to update role.', 'error');
     }
   };
 
@@ -127,9 +128,9 @@ export const TeamPage = () => {
       if (error) throw error;
       toast(`Updated portal access for ${user.full_name}.`);
       fetchTeam();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error changing portal access:', error);
-      toast(error.message || 'Failed to update portal access.', 'error');
+      toast(error instanceof Error ? error.message : 'Failed to update portal access.', 'error');
     }
   };
 

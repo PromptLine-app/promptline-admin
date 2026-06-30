@@ -48,6 +48,7 @@ export const BusinessCallsPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchCalls();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);

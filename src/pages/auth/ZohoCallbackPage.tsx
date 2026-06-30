@@ -34,6 +34,7 @@ const ZohoCallbackPage = () => {
     }
 
     if (errorParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
       setStatus(`Zoho authentication failed: ${errorParam}`);
       setTimeout(() => navigate('/login'), 3000);
       return;

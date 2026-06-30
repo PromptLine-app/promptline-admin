@@ -1,4 +1,4 @@
-import { useState, useMemo, ReactNode } from 'react';
+import { useState, useMemo, ReactNode, Key } from 'react';
 import { FiChevronUp, FiChevronDown } from 'react-icons/fi';
 
 export type ColumnDef<T> = {
@@ -17,7 +17,7 @@ type DataTableProps<T> = {
   emptyMessage?: string;
 };
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends Record<string, unknown>>({
   data,
   columns,
   onRowClick,
@@ -42,15 +42,15 @@ export function DataTable<T extends Record<string, any>>({
     if (!sortKey) return data;
     
     return [...data].sort((a, b) => {
-      let aVal = a[sortKey];
-      let bVal = b[sortKey];
-      
+      let aVal: unknown = a[sortKey];
+      let bVal: unknown = b[sortKey];
+
       // Handle nested values if needed, but for simplicity we assume flat or pre-processed
       if (typeof aVal === 'string') aVal = aVal.toLowerCase();
       if (typeof bVal === 'string') bVal = bVal.toLowerCase();
 
-      if (aVal < bVal) return sortDesc ? 1 : -1;
-      if (aVal > bVal) return sortDesc ? -1 : 1;
+      if ((aVal as number) < (bVal as number)) return sortDesc ? 1 : -1;
+      if ((aVal as number) > (bVal as number)) return sortDesc ? -1 : 1;
       return 0;
     });
   }, [data, sortKey, sortDesc]);
@@ -95,7 +95,7 @@ export function DataTable<T extends Record<string, any>>({
           <tbody>
             {sortedData.map((row, i) => (
               <tr 
-                key={row.id || i} 
+                key={(row.id as Key) || i}
                 onClick={() => onRowClick && onRowClick(row)}
                 className={onRowClick ? 'clickable' : ''}
               >

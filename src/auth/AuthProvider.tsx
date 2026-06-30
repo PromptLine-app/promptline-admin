@@ -19,13 +19,13 @@ export type AuthContextValue = {
   signOut: () => Promise<void>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- context/provider + hook colocated by design; fast-refresh only
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [session, setSession] = useState<Session | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [initializing, setInitializing] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
 
   const loadAdminUser = useCallback(async (authUserId: string) => {
     try {
@@ -91,7 +91,6 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   }, [session]);
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
-    setAuthError(null);
     const { error } = await supabaseAuth.auth.signInWithPassword({ email, password });
     if (error) {
       throw new Error(error.message);

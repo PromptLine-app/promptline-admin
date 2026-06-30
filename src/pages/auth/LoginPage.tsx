@@ -45,9 +45,9 @@ export const LoginPage = () => {
     try {
       await signInWithPassword(email, password);
       // Let the useEffect handle the redirect once adminUser is loaded
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'LoginPage.handleSubmit' });
-      setError(err.message || 'Failed to sign in.');
+      setError(err instanceof Error ? err.message : 'Failed to sign in.');
     } finally {
       setLoading(false);
     }
@@ -57,9 +57,9 @@ export const LoginPage = () => {
     setError(null);
     try {
       beginZohoLogin();
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'LoginPage.handleZohoSignIn' });
-      setError(err.message || 'Unable to continue with Zoho');
+      setError(err instanceof Error ? err.message : 'Unable to continue with Zoho');
     }
   };
 
@@ -73,9 +73,9 @@ export const LoginPage = () => {
       });
       if (resetError) throw resetError;
       setResetSent(true);
-    } catch (err: any) {
+    } catch (err) {
       reportError(err, { where: 'LoginPage.handleResetPassword' });
-      setError(err.message || 'Failed to send reset email');
+      setError(err instanceof Error ? err.message : 'Failed to send reset email');
     } finally {
       setLoading(false);
     }
