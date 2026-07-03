@@ -14,7 +14,7 @@ import { getAdminClient, requireAdmin } from "../_lib/adminAuth.js";
 const CUSTOMER_APP_URL =
   process.env.CUSTOMER_APP_URL ||
   process.env.VITE_CUSTOMER_APP_URL ||
-  "https://promptline-secure.vercel.app";
+  "https://secure.promptline.app";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });

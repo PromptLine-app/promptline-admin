@@ -11,7 +11,9 @@ import { formatUsd } from '@/types/domain';
  *
  * Throws on any failure so callers can surface a toast.
  */
-const BILLING_PORTAL_URL = 'https://promptline-secure.vercel.app/billing';
+const CUSTOMER_APP_URL =
+  import.meta.env.VITE_CUSTOMER_APP_URL ?? 'https://secure.promptline.app';
+const BILLING_PORTAL_URL = `${CUSTOMER_APP_URL.replace(/\/$/, '')}/billing`;
 
 export type ReminderArgs = {
   tenantId: string;
