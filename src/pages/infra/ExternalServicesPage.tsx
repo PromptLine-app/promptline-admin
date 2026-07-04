@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
 import { PageHeader } from '@/components/common/PageHeader';
 import { reportError } from '@/lib/sentry';
@@ -42,6 +43,7 @@ interface InfraMetrics {
 }
 
 export const ExternalServicesPage = () => {
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState<InfraMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -123,6 +125,16 @@ export const ExternalServicesPage = () => {
               <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '1rem', borderRadius: '8px', color: '#ef4444', fontSize: '0.9rem' }}>
                 API Keys missing or invalid.
               </div>
+            )}
+
+            {metrics.twilio.status === 'healthy' && (
+              <button
+                className="btn btn--secondary btn--sm"
+                style={{ alignSelf: 'flex-start', marginTop: '0.25rem' }}
+                onClick={() => navigate('/infra/twilio-usage')}
+              >
+                View Spend Details →
+              </button>
             )}
           </div>
 

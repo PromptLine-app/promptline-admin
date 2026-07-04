@@ -4,6 +4,8 @@ import {
   FiCpu,
   FiDatabase,
   FiShield,
+  FiActivity,
+  FiDollarSign,
 } from 'react-icons/fi';
 import './navigation.css';
 
@@ -35,6 +37,10 @@ export const InfraSideNav = () => {
             <NavLink to="/infra/services" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiCpu /></span>
               Services
+            </NavLink>
+            <NavLink to="/infra/twilio-usage" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiDollarSign /></span>
+              Twilio Usage
             </NavLink>
             <NavLink to="/infra/database" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiDatabase /></span>

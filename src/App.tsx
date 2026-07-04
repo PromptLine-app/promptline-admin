@@ -30,6 +30,7 @@ import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
 import { ExternalServicesPage } from '@/pages/infra/ExternalServicesPage';
+import { TwilioUsagePage } from '@/pages/infra/TwilioUsagePage';
 
 
 const ErrorFallback = () => (
@@ -155,6 +156,7 @@ export default function App() {
       >
         <Route index element={<InfraDashboardPage />} />
         <Route path="services" element={<ExternalServicesPage />} />
+        <Route path="twilio-usage" element={<TwilioUsagePage />} />
         {/* Placeholder routes — pages will be built as monitoring data sources are connected */}
         <Route path="database" element={<div className="page-card"><div className="empty-state"><h3>Database</h3><p>Database monitoring coming soon.</p></div></div>} />
         <Route path="security" element={<div className="page-card"><div className="empty-state"><h3>Security</h3><p>Security monitoring coming soon.</p></div></div>} />
