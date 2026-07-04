@@ -10,8 +10,6 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiMessageSquare,
-  FiPhoneIncoming,
-  FiPhoneOutgoing,
   FiBriefcase,
   FiHash,
 } from 'react-icons/fi';
@@ -21,17 +19,18 @@ import { useNavigate } from 'react-router-dom';
 interface PhoneNumber {
   phoneNumber: string;
   friendlyName: string;
-  monthlyPrice: string;
+  monthlyPrice: number;
   capabilities: { voice: boolean; sms: boolean; mms: boolean };
   dateCreated: string;
+  env: string | null;
 }
 
 interface BusinessEntry {
   businessName: string;
   tenantId: string;
+  env: string | null;
   monthlyPhoneCost: number;
   phoneNumbers: PhoneNumber[];
-  callsLast30Days: { total: number; inbound: number; outbound: number };
 }
 
 interface CategoryEntry {
@@ -47,6 +46,7 @@ interface SpendData {
   totalSpend: number;
   totalPhoneNumbers: number;
   totalBusinesses: number;
+  perNumberCost: number;
   categories: CategoryEntry[];
   businesses: BusinessEntry[];
 }
@@ -72,13 +72,38 @@ function formatDate(dateStr: string): string {
 }
 
 function formatPhone(phone: string): string {
-  // Format +1XXXXXXXXXX as (XXX) XXX-XXXX
   const digits = phone.replace(/\D/g, '');
   if (digits.length === 11 && digits.startsWith('1')) {
     return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
   }
   return phone;
 }
+
+/* ── Env Badge ── */
+const EnvBadge = ({ env }: { env: string | null }) => {
+  if (!env) return null;
+  const isProd = env === 'Prod';
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '0.1rem 0.45rem',
+        borderRadius: '4px',
+        fontSize: '0.65rem',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+        background: isProd ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+        color: isProd ? '#ef4444' : '#3b82f6',
+        border: `1px solid ${isProd ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+        marginLeft: '0.5rem',
+        verticalAlign: 'middle',
+      }}
+    >
+      {env}
+    </span>
+  );
+};
 
 /* ── Component ── */
 export const TwilioUsagePage = () => {
@@ -163,17 +188,17 @@ export const TwilioUsagePage = () => {
             <div className="kpi-card">
               <p className="kpi-card__label">Phone Numbers</p>
               <p className="kpi-card__value">{data.totalPhoneNumbers}</p>
-              <p className="kpi-card__meta">active Twilio numbers</p>
+              <p className="kpi-card__meta">~{formatUSD(data.perNumberCost)} each/mo</p>
             </div>
             <div className="kpi-card">
               <p className="kpi-card__label">Businesses</p>
               <p className="kpi-card__value">{data.totalBusinesses}</p>
-              <p className="kpi-card__meta">PromptLine tenants using Twilio</p>
+              <p className="kpi-card__meta">assigned to PromptLine tenants</p>
             </div>
             <div className="kpi-card">
-              <p className="kpi-card__label">Categories</p>
-              <p className="kpi-card__value">{data.categories.length}</p>
-              <p className="kpi-card__meta">usage types with charges</p>
+              <p className="kpi-card__label">Unassigned</p>
+              <p className="kpi-card__value">{data.totalPhoneNumbers - data.businesses.reduce((s, b) => s + (b.tenantId ? b.phoneNumbers.length : 0), 0)}</p>
+              <p className="kpi-card__meta">numbers not linked to a business</p>
             </div>
           </div>
 
@@ -185,7 +210,7 @@ export const TwilioUsagePage = () => {
                 Spend by Business
               </h3>
               <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                Click a row to see phone numbers & call details
+                Click a row to see phone numbers & details
               </span>
             </div>
 
@@ -220,10 +245,10 @@ export const TwilioUsagePage = () => {
                       <div style={{ flex: 1 }}>
                         <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>
                           {biz.businessName}
+                          <EnvBadge env={biz.env} />
                         </p>
                         <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.15rem' }}>
                           {biz.phoneNumbers.length} phone number{biz.phoneNumbers.length !== 1 ? 's' : ''}
-                          {biz.callsLast30Days.total > 0 && ` · ${biz.callsLast30Days.total} calls this month`}
                         </p>
                       </div>
 
@@ -246,27 +271,6 @@ export const TwilioUsagePage = () => {
                           animation: 'fadeIn 0.2s ease-out',
                         }}
                       >
-                        {/* Call Stats */}
-                        {biz.callsLast30Days.total > 0 && (
-                          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-                              <FiPhone size={14} style={{ color: '#6366f1' }} />
-                              <span style={{ fontWeight: 600 }}>{biz.callsLast30Days.total}</span>
-                              <span className="text-muted">total calls</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-                              <FiPhoneIncoming size={14} style={{ color: '#10b981' }} />
-                              <span style={{ fontWeight: 600 }}>{biz.callsLast30Days.inbound}</span>
-                              <span className="text-muted">inbound</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-                              <FiPhoneOutgoing size={14} style={{ color: '#f59e0b' }} />
-                              <span style={{ fontWeight: 600 }}>{biz.callsLast30Days.outbound}</span>
-                              <span className="text-muted">outbound</span>
-                            </div>
-                          </div>
-                        )}
-
                         {/* Phone Numbers */}
                         <p style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))', marginBottom: '0.5rem' }}>
                           Phone Numbers
@@ -306,10 +310,28 @@ export const TwilioUsagePage = () => {
                                 </div>
                               </div>
                               <p style={{ fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.85rem' }}>
-                                ${parseFloat(pn.monthlyPrice).toFixed(2)}/mo
+                                {formatUSD(pn.monthlyPrice)}/mo
                               </p>
                             </div>
                           ))}
+                        </div>
+
+                        {/* Why this costs money */}
+                        <div style={{
+                          marginTop: '1rem',
+                          padding: '0.75rem 1rem',
+                          background: 'rgba(99, 102, 241, 0.08)',
+                          borderRadius: 'calc(var(--radius) * 0.7)',
+                          border: '1px solid rgba(99, 102, 241, 0.2)',
+                          fontSize: '0.82rem',
+                          color: 'hsl(var(--muted-foreground))',
+                        }}>
+                          <strong style={{ color: 'hsl(var(--foreground))' }}>Why does this cost money?</strong>
+                          <p style={{ marginTop: '0.25rem' }}>
+                            Each phone number costs ~{formatUSD(data.perNumberCost)}/mo to keep active on Twilio.
+                            {biz.phoneNumbers.some(p => p.capabilities.voice) && ' Voice-enabled numbers receive inbound calls handled by the PromptLine AI agent.'}
+                            {biz.phoneNumbers.some(p => p.capabilities.sms) && ' SMS-enabled numbers send/receive text messages for follow-ups and confirmations.'}
+                          </p>
                         </div>
 
                         {/* Link to business detail */}
