@@ -44,6 +44,7 @@ interface CategoryEntry {
 
 interface SpendData {
   dateRange: { from: string; to: string };
+  days: number;
   totalSpend: number;
   totalPhoneNumbers: number;
   totalBusinesses: number;
@@ -147,13 +148,15 @@ export const TwilioUsagePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedBusiness, setExpandedBusiness] = useState<string | null>(null);
+  const [period, setPeriod] = useState<30 | 60 | 90>(30);
 
-  const fetchData = async () => {
+  const fetchData = async (days: 30 | 60 | 90 = period) => {
     setLoading(true);
     setError(null);
     try {
       const { data: result, error: fnError } = await supabase.functions.invoke(
         'fetch-twilio-recent-spend',
+        { body: { days } },
       );
       if (fnError) throw fnError;
       setData(result as SpendData);
@@ -165,13 +168,34 @@ export const TwilioUsagePage = () => {
     }
   };
 
+  const handlePeriodChange = (days: 30 | 60 | 90) => {
+    setPeriod(days);
+    setData(null);
+    setExpandedBusiness(null);
+    fetchData(days);
+  };
+
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleBusiness = (key: string) => {
     setExpandedBusiness((prev) => (prev === key ? null : key));
   };
+
+  // Segmented control styles
+  const segBtn = (active: boolean): React.CSSProperties => ({
+    padding: '0.35rem 1rem',
+    fontSize: '0.82rem',
+    fontWeight: active ? 700 : 500,
+    border: '1px solid hsl(var(--border))',
+    background: active ? 'hsl(var(--primary))' : 'transparent',
+    color: active ? '#fff' : 'hsl(var(--foreground))',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    whiteSpace: 'nowrap' as const,
+  });
 
   return (
     <div className="page-content">
@@ -183,7 +207,24 @@ export const TwilioUsagePage = () => {
             : 'Loading…'
         }
         actions={
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* 30 / 60 / 90 day toggle */}
+            <div style={{ display: 'flex', borderRadius: 'var(--radius)', overflow: 'hidden', border: '1px solid hsl(var(--border))' }}>
+              {([30, 60, 90] as const).map((d, i) => (
+                <button
+                  key={d}
+                  style={{
+                    ...segBtn(period === d),
+                    borderRadius: i === 0 ? 'var(--radius) 0 0 var(--radius)' : i === 2 ? '0 var(--radius) var(--radius) 0' : '0',
+                    borderLeft: i > 0 ? 'none' : undefined,
+                  }}
+                  onClick={() => handlePeriodChange(d)}
+                  disabled={loading}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
             <button className="btn btn--secondary" onClick={() => navigate('/infra/services')}>
               <FiArrowLeft /> Services
             </button>
@@ -192,7 +233,7 @@ export const TwilioUsagePage = () => {
                 <FiDownload /> Export CSV
               </button>
             )}
-            <button className="btn btn--secondary" onClick={fetchData} disabled={loading}>
+            <button className="btn btn--secondary" onClick={() => fetchData(period)} disabled={loading}>
               <FiRefreshCw className={loading ? 'spin' : ''} /> Refresh
             </button>
           </div>
@@ -221,7 +262,7 @@ export const TwilioUsagePage = () => {
           {/* ── KPI Row ── */}
           <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
             <div className="kpi-card">
-              <p className="kpi-card__label">Total Spend (30 days)</p>
+              <p className="kpi-card__label">Total Spend ({period} days)</p>
               <p className="kpi-card__value" style={{ color: '#6366f1' }}>{formatUSD(data.totalSpend)}</p>
               <p className="kpi-card__meta">across all categories</p>
             </div>
