@@ -12,6 +12,7 @@ import {
   FiMessageSquare,
   FiBriefcase,
   FiHash,
+  FiDownload,
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 
@@ -54,6 +55,40 @@ interface SpendData {
 /* ── Helpers ── */
 function formatUSD(amount: number): string {
   return `$${amount.toFixed(2)}`;
+}
+
+function downloadCSV(data: SpendData) {
+  const rows: string[][] = [
+    ['Phone Number', 'Business Name', 'Tenant ID', 'Environment', 'Monthly Cost ($)', 'Voice', 'SMS', 'MMS', 'Date Purchased'],
+  ];
+
+  for (const biz of data.businesses) {
+    for (const pn of biz.phoneNumbers) {
+      rows.push([
+        pn.phoneNumber,
+        biz.businessName,
+        biz.tenantId || 'unassigned',
+        biz.env || 'Unknown',
+        pn.monthlyPrice.toFixed(2),
+        pn.capabilities.voice ? 'Yes' : 'No',
+        pn.capabilities.sms ? 'Yes' : 'No',
+        pn.capabilities.mms ? 'Yes' : 'No',
+        pn.dateCreated ? new Date(pn.dateCreated).toLocaleDateString() : '',
+      ]);
+    }
+  }
+
+  const csv = rows
+    .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `twilio-numbers-${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function formatCategory(cat: string): string {
@@ -152,6 +187,11 @@ export const TwilioUsagePage = () => {
             <button className="btn btn--secondary" onClick={() => navigate('/infra/services')}>
               <FiArrowLeft /> Services
             </button>
+            {data && (
+              <button className="btn btn--secondary" onClick={() => downloadCSV(data)} title="Download phone number list as CSV">
+                <FiDownload /> Export CSV
+              </button>
+            )}
             <button className="btn btn--secondary" onClick={fetchData} disabled={loading}>
               <FiRefreshCw className={loading ? 'spin' : ''} /> Refresh
             </button>
