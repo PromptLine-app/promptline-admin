@@ -8,7 +8,8 @@ import {
   FiActivity,
   FiAlertTriangle,
   FiCreditCard,
-  FiUserCheck
+  FiUserCheck,
+  FiTarget
 } from 'react-icons/fi';
 import './navigation.css';
 
@@ -34,6 +35,10 @@ export const SideNav = () => {
             <NavLink to="/health" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiAlertTriangle /></span>
               Health
+            </NavLink>
+            <NavLink to="/sentry" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiTarget /></span>
+              Sentry
             </NavLink>
           </div>
         </div>

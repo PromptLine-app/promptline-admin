@@ -31,6 +31,7 @@ import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
 import { ExternalServicesPage } from '@/pages/infra/ExternalServicesPage';
 import { TwilioUsagePage } from '@/pages/infra/TwilioUsagePage';
+import { SentryPage } from '@/pages/infra/SentryPage';
 
 
 const ErrorFallback = () => (
@@ -122,6 +123,7 @@ export default function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="health" element={<HealthPage />} />
+        <Route path="sentry" element={<SentryPage />} />
 
         <Route path="businesses" element={<BusinessListPage />} />
         <Route path="businesses/:id" element={<BusinessDetailPage />} />
@@ -160,6 +162,7 @@ export default function App() {
         {/* Placeholder routes — pages will be built as monitoring data sources are connected */}
         <Route path="database" element={<div className="page-card"><div className="empty-state"><h3>Database</h3><p>Database monitoring coming soon.</p></div></div>} />
         <Route path="security" element={<div className="page-card"><div className="empty-state"><h3>Security</h3><p>Security monitoring coming soon.</p></div></div>} />
+        <Route path="sentry" element={<SentryPage />} />
 
       </Route>
     </Routes>

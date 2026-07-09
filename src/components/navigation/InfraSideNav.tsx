@@ -6,6 +6,7 @@ import {
   FiShield,
   FiActivity,
   FiDollarSign,
+  FiTarget
 } from 'react-icons/fi';
 import './navigation.css';
 
@@ -49,6 +50,10 @@ export const InfraSideNav = () => {
             <NavLink to="/infra/security" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiShield /></span>
               Security
+            </NavLink>
+            <NavLink to="/infra/sentry" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiTarget /></span>
+              Sentry
             </NavLink>
           </div>
         </div>
