@@ -79,7 +79,6 @@ export default defineConfig(({ mode }) => {
     'SUPABASE_SECRET_KEY',
     'SUPABASE_URL',
     'VITE_SUPABASE_URL',
-    'CUSTOMER_APP_URL',
   ]) {
     if (env[key] && !process.env[key]) process.env[key] = env[key];
   }
