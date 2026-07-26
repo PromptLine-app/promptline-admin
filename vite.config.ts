@@ -19,6 +19,8 @@ const devApiRoutes: Record<string, string> = {
   '/api/admin/impersonate': 'api/admin/impersonate.js',
   '/api/admin/team': 'api/admin/team.js',
   '/api/admin/send-followup': 'api/admin/send-followup.js',
+  '/api/admin/twilio-numbers': 'api/admin/twilio-numbers.js',
+  '/api/admin/twilio-release': 'api/admin/twilio-release.js',
 };
 
 function devApi(): Plugin {
@@ -81,6 +83,10 @@ export default defineConfig(({ mode }) => {
     'VITE_SUPABASE_URL',
     'CUSTOMER_APP_URL',
     'VITE_CUSTOMER_APP_URL',
+    'TWILIO_ACCOUNT_SID',
+    'TWILIO_AUTH_TOKEN',
+    'OTHER_SUPABASE_URL',
+    'OTHER_SUPABASE_SERVICE_KEY',
   ]) {
     if (env[key] && !process.env[key]) process.env[key] = env[key];
   }
