@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/config/supabase';
+import { useEffect, useState, useCallback } from 'react';
+import { adminApi } from '@/lib/adminApi';
 import { PageHeader } from '@/components/common/PageHeader';
 import { reportError } from '@/lib/sentry';
 import {
@@ -13,6 +13,10 @@ import {
   FiBriefcase,
   FiHash,
   FiDownload,
+  FiTrash2,
+  FiAlertTriangle,
+  FiX,
+  FiServer,
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 
@@ -24,6 +28,9 @@ interface PhoneNumber {
   capabilities: { voice: boolean; sms: boolean; mms: boolean };
   dateCreated: string;
   env: string | null;
+  accountSid: string;
+  accountName: string;
+  numberSid: string;
 }
 
 interface BusinessEntry {
@@ -32,6 +39,13 @@ interface BusinessEntry {
   env: string | null;
   monthlyPhoneCost: number;
   phoneNumbers: PhoneNumber[];
+}
+
+interface AccountInfo {
+  sid: string;
+  name: string;
+  isMain: boolean;
+  numberCount: number;
 }
 
 interface CategoryEntry {
@@ -49,6 +63,7 @@ interface SpendData {
   totalPhoneNumbers: number;
   totalBusinesses: number;
   perNumberCost: number;
+  accounts: AccountInfo[];
   categories: CategoryEntry[];
   businesses: BusinessEntry[];
 }
@@ -60,7 +75,7 @@ function formatUSD(amount: number): string {
 
 function downloadCSV(data: SpendData) {
   const rows: string[][] = [
-    ['Phone Number', 'Business Name', 'Tenant ID', 'Environment', 'Monthly Cost ($)', 'Voice', 'SMS', 'MMS', 'Date Purchased'],
+    ['Phone Number', 'Business Name', 'Tenant ID', 'Environment', 'Twilio Account', 'Monthly Cost ($)', 'Voice', 'SMS', 'MMS', 'Date Purchased'],
   ];
 
   for (const biz of data.businesses) {
@@ -70,6 +85,7 @@ function downloadCSV(data: SpendData) {
         biz.businessName,
         biz.tenantId || 'unassigned',
         biz.env || 'Unknown',
+        pn.accountName || 'Unknown',
         pn.monthlyPrice.toFixed(2),
         pn.capabilities.voice ? 'Yes' : 'No',
         pn.capabilities.sms ? 'Yes' : 'No',
@@ -141,6 +157,172 @@ const EnvBadge = ({ env }: { env: string | null }) => {
   );
 };
 
+/* ── Account Badge ── */
+const AccountBadge = ({ name, isMain }: { name: string; isMain?: boolean }) => {
+  const isMainAcct = isMain ?? name === 'Main Account';
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '0.1rem 0.45rem',
+        borderRadius: '4px',
+        fontSize: '0.6rem',
+        fontWeight: 600,
+        letterSpacing: '0.04em',
+        background: isMainAcct ? 'rgba(168, 85, 247, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+        color: isMainAcct ? '#a855f7' : '#22c55e',
+        border: `1px solid ${isMainAcct ? 'rgba(168, 85, 247, 0.25)' : 'rgba(34, 197, 94, 0.25)'}`,
+        marginLeft: '0.4rem',
+        verticalAlign: 'middle',
+      }}
+    >
+      <FiServer size={8} style={{ marginRight: '0.2rem', verticalAlign: '-1px' }} />
+      {name}
+    </span>
+  );
+};
+
+/* ── Release Confirmation Modal ── */
+const ReleaseModal = ({
+  phone,
+  businessName,
+  monthlyCost,
+  onConfirm,
+  onCancel,
+  releasing,
+}: {
+  phone: string;
+  businessName: string;
+  monthlyCost: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+  releasing: boolean;
+}) => (
+  <div
+    style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'rgba(0, 0, 0, 0.6)',
+      backdropFilter: 'blur(4px)',
+      animation: 'fadeIn 0.15s ease-out',
+    }}
+    onClick={(e) => { if (e.target === e.currentTarget && !releasing) onCancel(); }}
+  >
+    <div
+      style={{
+        background: 'hsl(var(--card))',
+        border: '1px solid hsl(var(--border))',
+        borderRadius: 'var(--radius)',
+        padding: '2rem',
+        maxWidth: '440px',
+        width: '90%',
+        boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+        animation: 'fadeIn 0.2s ease-out',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <div style={{
+            width: '40px', height: '40px', borderRadius: '50%',
+            background: 'rgba(239, 68, 68, 0.12)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <FiAlertTriangle size={20} style={{ color: '#ef4444' }} />
+          </div>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Release Phone Number</h3>
+        </div>
+        {!releasing && (
+          <button
+            onClick={onCancel}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem', color: 'hsl(var(--muted-foreground))' }}
+          >
+            <FiX size={18} />
+          </button>
+        )}
+      </div>
+
+      <div style={{
+        background: 'rgba(239, 68, 68, 0.06)',
+        border: '1px solid rgba(239, 68, 68, 0.15)',
+        borderRadius: 'calc(var(--radius) * 0.7)',
+        padding: '1rem',
+        marginBottom: '1.25rem',
+      }}>
+        <p style={{ margin: 0, fontSize: '0.85rem', color: '#ef4444', fontWeight: 600, marginBottom: '0.5rem' }}>
+          This action cannot be undone
+        </p>
+        <p style={{ margin: 0, fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))' }}>
+          The number will be permanently released from your Twilio account.
+          {businessName !== 'Unassigned' && ' This number is currently assigned to a business.'}
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+          <span className="text-muted">Number</span>
+          <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>{formatPhone(phone)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+          <span className="text-muted">Business</span>
+          <span style={{ fontWeight: 600, color: businessName !== 'Unassigned' ? '#f59e0b' : 'hsl(var(--muted-foreground))' }}>
+            {businessName}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+          <span className="text-muted">Monthly savings</span>
+          <span style={{ fontWeight: 600, color: '#10b981' }}>{formatUSD(monthlyCost)}/mo</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+        <button
+          className="btn btn--secondary"
+          onClick={onCancel}
+          disabled={releasing}
+          style={{ minWidth: '80px' }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={releasing}
+          style={{
+            padding: '0.5rem 1.25rem',
+            borderRadius: 'var(--radius)',
+            border: 'none',
+            background: releasing ? '#991b1b' : '#ef4444',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            cursor: releasing ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            opacity: releasing ? 0.7 : 1,
+            transition: 'all 0.15s ease',
+            minWidth: '120px',
+            justifyContent: 'center',
+          }}
+        >
+          {releasing ? (
+            <>
+              <FiRefreshCw size={14} className="spin" /> Releasing…
+            </>
+          ) : (
+            <>
+              <FiTrash2 size={14} /> Release Number
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 /* ── Component ── */
 export const TwilioUsagePage = () => {
   const navigate = useNavigate();
@@ -149,30 +331,64 @@ export const TwilioUsagePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedBusiness, setExpandedBusiness] = useState<string | null>(null);
   const [period, setPeriod] = useState<30 | 60 | 90>(30);
+  const [accountFilter, setAccountFilter] = useState<string>('all');
 
-  const fetchData = async (days: 30 | 60 | 90 = period) => {
+  // Release state
+  const [releaseTarget, setReleaseTarget] = useState<{
+    numberSid: string;
+    accountSid: string;
+    phoneNumber: string;
+    businessName: string;
+    monthlyPrice: number;
+  } | null>(null);
+  const [releasing, setReleasing] = useState(false);
+  const [releaseSuccess, setReleaseSuccess] = useState<string | null>(null);
+
+  const fetchData = useCallback(async (days: 30 | 60 | 90 = period) => {
     setLoading(true);
     setError(null);
     try {
-      const { data: result, error: fnError } = await supabase.functions.invoke(
-        'fetch-twilio-recent-spend',
-        { body: { days } },
-      );
-      if (fnError) throw fnError;
-      setData(result as SpendData);
-    } catch (err: any) {
+      const result = await adminApi<SpendData>('/api/admin/twilio-numbers', 'POST', { days });
+      setData(result);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       reportError(err, { where: 'TwilioUsagePage.fetchData' });
-      setError(err.message || String(err));
+      setError(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
 
   const handlePeriodChange = (days: 30 | 60 | 90) => {
     setPeriod(days);
     setData(null);
     setExpandedBusiness(null);
     fetchData(days);
+  };
+
+  const handleRelease = async () => {
+    if (!releaseTarget) return;
+    setReleasing(true);
+    try {
+      await adminApi('/api/admin/twilio-release', 'POST', {
+        numberSid: releaseTarget.numberSid,
+        accountSid: releaseTarget.accountSid,
+      });
+      setReleaseSuccess(releaseTarget.phoneNumber);
+      setReleaseTarget(null);
+      // Auto-refresh data after release
+      setTimeout(() => {
+        setReleaseSuccess(null);
+        fetchData(period);
+      }, 2000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      reportError(err, { where: 'TwilioUsagePage.handleRelease' });
+      setError(`Release failed: ${message}`);
+      setReleaseTarget(null);
+    } finally {
+      setReleasing(false);
+    }
   };
 
   useEffect(() => {
@@ -184,6 +400,22 @@ export const TwilioUsagePage = () => {
     setExpandedBusiness((prev) => (prev === key ? null : key));
   };
 
+  // Filter businesses by account
+  const filteredBusinesses = data?.businesses.map((biz) => {
+    if (accountFilter === 'all') return biz;
+    const filtered = biz.phoneNumbers.filter((pn) => pn.accountSid === accountFilter);
+    if (filtered.length === 0) return null;
+    return {
+      ...biz,
+      phoneNumbers: filtered,
+      monthlyPhoneCost: filtered.reduce((s, p) => s + p.monthlyPrice, 0),
+    };
+  }).filter(Boolean) as BusinessEntry[] ?? [];
+
+  const filteredTotalNumbers = accountFilter === 'all'
+    ? data?.totalPhoneNumbers ?? 0
+    : data?.accounts.find(a => a.sid === accountFilter)?.numberCount ?? 0;
+
   // Segmented control styles
   const segBtn = (active: boolean): React.CSSProperties => ({
     padding: '0.35rem 1rem',
@@ -192,6 +424,20 @@ export const TwilioUsagePage = () => {
     border: '1px solid hsl(var(--border))',
     background: active ? 'hsl(var(--primary))' : 'transparent',
     color: active ? '#fff' : 'hsl(var(--foreground))',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    whiteSpace: 'nowrap' as const,
+  });
+
+  // Account filter pill style
+  const acctPill = (active: boolean): React.CSSProperties => ({
+    padding: '0.3rem 0.85rem',
+    fontSize: '0.78rem',
+    fontWeight: active ? 700 : 500,
+    border: `1px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+    background: active ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+    color: active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
+    borderRadius: '9999px',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
     whiteSpace: 'nowrap' as const,
@@ -240,18 +486,43 @@ export const TwilioUsagePage = () => {
         }
       />
 
+      {/* Release success toast */}
+      {releaseSuccess && (
+        <div style={{
+          position: 'fixed', top: '1.5rem', right: '1.5rem', zIndex: 9998,
+          background: '#10b981', color: '#fff', padding: '0.75rem 1.25rem',
+          borderRadius: 'var(--radius)', fontWeight: 600, fontSize: '0.85rem',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.2)', animation: 'fadeIn 0.2s ease-out',
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+        }}>
+          <FiTrash2 size={16} /> Released {formatPhone(releaseSuccess)}
+        </div>
+      )}
+
+      {/* Release confirmation modal */}
+      {releaseTarget && (
+        <ReleaseModal
+          phone={releaseTarget.phoneNumber}
+          businessName={releaseTarget.businessName}
+          monthlyCost={releaseTarget.monthlyPrice}
+          onConfirm={handleRelease}
+          onCancel={() => !releasing && setReleaseTarget(null)}
+          releasing={releasing}
+        />
+      )}
+
       {/* Loading */}
       {loading && !data && (
         <div className="page-card" style={{ padding: '3rem', textAlign: 'center' }}>
           <FiDollarSign size={40} style={{ color: 'hsl(var(--muted-foreground))', marginBottom: '1rem', animation: 'pulse 1.5s infinite' }} />
-          <p className="text-muted">Querying Twilio and cross-referencing with PromptLine businesses…</p>
+          <p className="text-muted">Fetching phone numbers from all Twilio accounts…</p>
         </div>
       )}
 
       {/* Error */}
       {error && !data && (
         <div className="page-card" style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
-          <p>Failed to load Twilio spend data.</p>
+          <p>Failed to load Twilio data.</p>
           <p style={{ marginTop: '0.5rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{error}</p>
         </div>
       )}
@@ -269,7 +540,12 @@ export const TwilioUsagePage = () => {
             <div className="kpi-card">
               <p className="kpi-card__label">Phone Numbers</p>
               <p className="kpi-card__value">{data.totalPhoneNumbers}</p>
-              <p className="kpi-card__meta">~{formatUSD(data.perNumberCost)} each/mo</p>
+              <p className="kpi-card__meta">
+                {data.accounts.length > 1
+                  ? data.accounts.map(a => `${a.name}: ${a.numberCount}`).join(' · ')
+                  : `~${formatUSD(data.perNumberCost)} each/mo`
+                }
+              </p>
             </div>
             <div className="kpi-card">
               <p className="kpi-card__label">Businesses</p>
@@ -283,20 +559,47 @@ export const TwilioUsagePage = () => {
             </div>
           </div>
 
+          {/* ── Account Filter Pills ── */}
+          {data.accounts.length > 1 && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span className="text-muted" style={{ fontSize: '0.78rem', fontWeight: 600, marginRight: '0.25rem' }}>
+                <FiServer size={12} style={{ verticalAlign: '-2px', marginRight: '0.3rem' }} />
+                Filter by Account:
+              </span>
+              <button style={acctPill(accountFilter === 'all')} onClick={() => setAccountFilter('all')}>
+                All ({data.totalPhoneNumbers})
+              </button>
+              {data.accounts.map(acct => (
+                <button
+                  key={acct.sid}
+                  style={acctPill(accountFilter === acct.sid)}
+                  onClick={() => setAccountFilter(acct.sid)}
+                >
+                  {acct.name} ({acct.numberCount})
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* ── Per-Business Breakdown (Clickable) ── */}
           <div className="page-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
             <div className="page-card__header">
               <h3 className="page-card__title">
                 <FiBriefcase style={{ marginRight: '0.4rem', verticalAlign: '-2px' }} />
                 Spend by Business
+                {accountFilter !== 'all' && (
+                  <span className="text-muted" style={{ fontSize: '0.8rem', fontWeight: 400, marginLeft: '0.5rem' }}>
+                    ({filteredTotalNumbers} numbers)
+                  </span>
+                )}
               </h3>
               <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                Click a row to see phone numbers & details
+                Click a row to see phone numbers · Click 🗑️ to release
               </span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-              {data.businesses.map((biz) => {
+              {filteredBusinesses.map((biz) => {
                 const key = biz.tenantId || biz.businessName;
                 const isExpanded = expandedBusiness === key;
 
@@ -370,11 +673,12 @@ export const TwilioUsagePage = () => {
                                 border: '1px solid hsl(var(--border))',
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
                                 <FiHash size={14} style={{ color: 'hsl(var(--muted-foreground))' }} />
                                 <div>
                                   <p style={{ fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.9rem' }}>
                                     {formatPhone(pn.phoneNumber)}
+                                    <AccountBadge name={pn.accountName} />
                                   </p>
                                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.2rem' }}>
                                     {pn.capabilities.voice && (
@@ -387,12 +691,45 @@ export const TwilioUsagePage = () => {
                                         <FiMessageSquare size={10} /> SMS
                                       </span>
                                     )}
+                                    {pn.dateCreated && (
+                                      <span style={{ fontSize: '0.68rem', color: 'hsl(var(--muted-foreground))' }}>
+                                        Since {formatDate(pn.dateCreated)}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
-                              <p style={{ fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.85rem' }}>
-                                {formatUSD(pn.monthlyPrice)}/mo
-                              </p>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <p style={{ fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.85rem' }}>
+                                  {formatUSD(pn.monthlyPrice)}/mo
+                                </p>
+                                <button
+                                  title="Release this phone number"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReleaseTarget({
+                                      numberSid: pn.numberSid,
+                                      accountSid: pn.accountSid,
+                                      phoneNumber: pn.phoneNumber,
+                                      businessName: biz.businessName,
+                                      monthlyPrice: pn.monthlyPrice,
+                                    });
+                                  }}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    width: '32px', height: '32px', borderRadius: '6px',
+                                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                                    background: 'rgba(239, 68, 68, 0.06)',
+                                    color: '#ef4444', cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'; e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.06)'; e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)'; }}
+                                >
+                                  <FiTrash2 size={14} />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -434,9 +771,13 @@ export const TwilioUsagePage = () => {
                 );
               })}
 
-              {data.businesses.length === 0 && (
+              {filteredBusinesses.length === 0 && (
                 <div className="empty-state" style={{ padding: '2rem' }}>
-                  <p>No phone numbers found on this Twilio account.</p>
+                  <p>
+                    {accountFilter !== 'all'
+                      ? 'No phone numbers found in this account.'
+                      : 'No phone numbers found on any Twilio account.'}
+                  </p>
                 </div>
               )}
             </div>
@@ -450,7 +791,7 @@ export const TwilioUsagePage = () => {
                 Spend by Category
               </h3>
               <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                Last 30 days
+                Last {period} days
               </span>
             </div>
             <div className="data-table-wrapper">
