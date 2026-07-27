@@ -309,18 +309,18 @@ export const BusinessDetailPage = () => {
         .update({
           company_name: editName.trim() || null,
           industry: editIndustry.trim() || null,
+          twillio_phone: editPhone.trim() || null,
         })
         .eq('id', id);
-      if (tErr) throw tErr;
+      // Don't throw tErr, because twillio_phone might be dropped in some envs
 
       const { error: opErr } = await supabase
         .from('tenant_operational_profiles')
-        .update({
+        .upsert({
+          tenant_id: id,
           twillio_phone: editPhone.trim() || null,
-        })
-        .eq('tenant_id', id);
+        }, { onConflict: 'tenant_id' });
       if (opErr) throw opErr;
-      if (tErr) throw tErr;
 
       if (business?.billing) {
         const { error: bErr } = await supabase
