@@ -309,9 +309,17 @@ export const BusinessDetailPage = () => {
         .update({
           company_name: editName.trim() || null,
           industry: editIndustry.trim() || null,
-          twillio_phone: editPhone.trim() || null,
         })
         .eq('id', id);
+      if (tErr) throw tErr;
+
+      const { error: opErr } = await supabase
+        .from('tenant_operational_profiles')
+        .update({
+          twillio_phone: editPhone.trim() || null,
+        })
+        .eq('tenant_id', id);
+      if (opErr) throw opErr;
       if (tErr) throw tErr;
 
       if (business?.billing) {
