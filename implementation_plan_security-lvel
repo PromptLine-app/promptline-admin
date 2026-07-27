@@ -1,0 +1,424 @@
+# PromptLine Product Suite — Security Hardening Plan (Revised)
+
+A comprehensive application-level security plan across all four PromptLine products:
+**Secure** (customer dashboard), **Admin** (internal ops), **Answers Now** (marketing site), and **API** (Fastify backend).
+
+> [!NOTE]
+> **Database-level security** (RLS policies, auth hooks, Postgres functions) is **excluded** from this plan — that will be handled separately with your manager.
+
+---
+
+## Deployment Architecture
+
+| Layer | Sandbox (Testing) | Production |
+|-------|-------------------|------------|
+| **Frontends** | Vercel (preview/sandbox URLs) | Vercel (production URLs) |
+| **API Server** | Vercel serverless (sandbox) | Vercel serverless (production) |
+| **Edge Functions** | Sandbox Supabase project | Production Supabase project |
+| **Database** | Sandbox Supabase project | Production Supabase project |
+| **Env Variables** | Separate per Vercel env | Separate per Vercel env |
+
+Key implication: Security changes need to work correctly across **both** deployment environments. CORS allowlists, CSP headers, and rate-limiting configs must account for sandbox + production domains.
+
+---
+
+## Executive Summary
+
+After auditing the codebase, I've identified **6 critical**, **6 high**, and **8 medium** priority application-level security issues:
+
+1. **Every edge function uses `Access-Control-Allow-Origin: '*'`** — any website can call your Supabase functions
+2. **Zero rate limiting** on the API server or edge functions
+3. **No Content Security Policy** (CSP) or security headers on any frontend
+4. **API server (Fastify) has no authentication middleware** — webhook routes accept requests without signature verification
+5. **Roles cached in localStorage** on Secure — tamperable via XSS (server RLS mitigates, but it's still a client-side gap)
+6. **`.env.example` had real secrets committed historically** (noted in the file itself, lines 67-69)
+
+---
+
+## User Review Required
+
+> [!CAUTION]
+> **Secret Rotation**: The [.env.example](file:///e:/promptline-new/promptline-secure/.env.example#L67-L69) in promptline-secure explicitly says *"Live values were previously committed… ROTATE every key that ever appeared here."* Has this rotation happened for ALL keys? If not, this is the **single highest priority item** — everything else is moot if an attacker has valid credentials from git history.
+
+> [!IMPORTANT]
+> **CORS tightening** requires knowing all production + sandbox domain names. Based on the codebase I see references to:
+> - `secure.promptline.app` / `secure.sandbox.promptline.app`
+> - `admin.promptline.app` / `admin.sandbox.promptline.app`
+> - API host (what domain does promptline-api use in production?)
+> 
+> Please confirm these so the CORS allowlist is correct.
+
+> [!WARNING]
+> **Rate limiting approach**: Since everything is on Vercel, we can use Vercel Edge Middleware for frontends + `@fastify/rate-limit` for the API. For edge functions, Supabase doesn't have built-in rate limiting — we'd need to add it at the function level or rely on Vercel's WAF. What's your preference?
+
+---
+
+## Open Questions
+
+1. **What are the exact production + sandbox domains** for all 4 products? (needed for CORS)
+2. **Do you have Vercel Firewall / DDoS protection** enabled on your Vercel plans?
+3. **Do you want session idle timeout?** Currently sessions persist until the Supabase JWT refresh token expires (~7 days). Should Admin have a shorter timeout (e.g., 30 min)?
+4. **Two-Factor Authentication (2FA)**: Do you want to enable Supabase MFA for admin users?
+5. **CAPTCHA preference**: For the Answers Now contact form — reCAPTCHA v3 or Cloudflare Turnstile?
+
+---
+
+## Proposed Changes
+
+### Phase 1 — Critical (P0) 🔴
+
+Exploitable vulnerabilities — fix immediately.
+
+---
+
+#### 1.1 Tighten CORS on ALL Edge Functions
+
+**Problem**: Every single edge function (47+ files) sets `Access-Control-Allow-Origin: '*'`. Any website on the internet can make authenticated cross-origin requests to your Supabase functions if a user has an active session.
+
+**Affected files**: All files in [supabase/functions/](file:///e:/promptline-new/promptline-secure/supabase/functions) — confirmed 47+ `index.ts` files with `'*'`.
+
+##### [NEW] `supabase/functions/_shared/cors.ts`
+Shared CORS utility with environment-aware origin allowlist:
+```typescript
+const ALLOWED_ORIGINS = [
+  // Production
+  'https://secure.promptline.app',
+  'https://admin.promptline.app',
+  // Sandbox
+  'https://secure.sandbox.promptline.app',
+  'https://admin.sandbox.promptline.app',
+  // Local dev
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+
+export function corsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') ?? '';
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : '';
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+  };
+}
+```
+
+##### [MODIFY] 47+ edge function `index.ts` files
+Replace every hardcoded CORS header object with `corsHeaders(req)` from the shared module.
+
+**Note**: Functions called by **external services** (e.g., `eleven-post-call` called by ElevenLabs, `paypal-webhook` called by PayPal, `sms-inbound` called by Twilio) don't need CORS at all since they're server-to-server. For those, CORS headers can be removed entirely and replaced with signature verification.
+
+---
+
+#### 1.2 API Server Authentication & Webhook Verification
+
+**Problem**: The Fastify API server ([index.js](file:///e:/promptline-new/promptline-api/index.js) — 1889 lines) has **no global authentication**. Routes like incoming calls accept tenantId from the request body without verifying the caller. Webhook endpoints (Twilio, ElevenLabs) don't verify request signatures.
+
+##### [NEW] `promptline-api/middleware/webhookAuth.js`
+Webhook signature verification middleware:
+- **Twilio**: Use `twilio.validateRequest(authToken, signature, url, params)` on `/incoming-call`, `/status-callback`, all SMS routes
+- **ElevenLabs**: Verify HMAC signature on `/eleven-post-call` webhook using `ELEVEN_SECRET`
+
+##### [MODIFY] [index.js](file:///e:/promptline-new/promptline-api/index.js)
+- Add `preHandler` hooks on webhook routes for signature verification
+- Add origin/API-key check on app-initiated routes (calls from Secure/Admin)
+- Keep public health-check routes unprotected
+
+---
+
+#### 1.3 Input Validation
+
+**Problem**: Request bodies across edge functions and the API server accept user input (phone numbers, emails, tenant IDs, business data) without thorough schema validation. While Supabase parameterizes queries, unvalidated input can still cause logic bugs and data integrity issues.
+
+##### [MODIFY] Edge functions (prioritized list)
+Add validation for all request bodies in security-sensitive functions:
+- `paypal-charge`, `paypal-vault-card`, `paypal-refund` — validate amounts, tenant IDs
+- `tenant-profile` — validate phone (E.164), email format, field lengths
+- `agents` — validate configuration objects
+- `send-sms-with-link`, `send-ms-email` — validate recipient addresses
+- `contacts` — validate contact data fields
+
+##### [MODIFY] [index.js](file:///e:/promptline-new/promptline-api/index.js)
+- Add JSON schema validation for Fastify routes (Fastify has built-in schema support)
+- Validate all phone numbers match E.164 format: `/^\+1\d{10}$/`
+- Validate UUIDs for tenant/business IDs
+
+---
+
+#### 1.4 Secret Rotation Verification
+
+**Problem**: [.env.example](file:///e:/promptline-new/promptline-secure/.env.example#L62-L69) explicitly warns that live values were previously committed to git.
+
+##### [ACTION] Manual verification required
+Confirm ALL of these keys have been rotated in **both sandbox and production** Vercel environments:
+
+| Service | Keys to Rotate |
+|---------|---------------|
+| Supabase | `SUPABASE_SERVICE_ROLE_KEY` (both projects) |
+| Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` |
+| ElevenLabs | `ELEVENLABS_API_KEY`, `ELEVEN_SECRET` |
+| OpenAI | `OPENAI_API_KEY` |
+| SendGrid | `SENDGRID_API_KEY` |
+| Google OAuth | `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN` |
+| Airtable | `AIRTABLE_API_KEY` |
+| PayPal | `PAYPAL_SECRET`, `PAYPAL_SANDBOX_SECRET` |
+| Square | `SQUARE_APPLICATION_SECRET`, `SQUARE_PAYMENTS_ACCESS_TOKEN` |
+
+---
+
+### Phase 2 — High Priority (P1) 🟠
+
+Significant attack surface reduction.
+
+---
+
+#### 2.1 Security Headers on All Frontends
+
+**Problem**: None of the three Vercel-deployed frontends set CSP, HSTS, X-Frame-Options, or other security headers. This allows XSS payloads to execute freely and enables clickjacking.
+
+##### [MODIFY] [promptline-secure/vercel.json](file:///e:/promptline-new/promptline-secure/vercel.json)
+##### [MODIFY] [promptline-admin/vercel.json](file:///e:/promptline-new/promptline-admin/vercel.json)
+##### [MODIFY] [prompt-line-answers-now/vercel.json](file:///e:/promptline-new/prompt-line-answers-now/vercel.json)
+
+Add security headers via Vercel config (applies to both sandbox and production deploys):
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.sentry-cdn.com https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.sentry.io wss://*.supabase.co; frame-src 'self' https://www.paypal.com https://www.sandbox.paypal.com"
+        },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(self), geolocation=()" }
+      ]
+    }
+  ]
+}
+```
+
+> [!NOTE]
+> Each product may need slightly different CSP rules (e.g., Admin doesn't need PayPal frame-src, Answers Now doesn't need Supabase connect-src). I'll tailor per product.
+
+---
+
+#### 2.2 Rate Limiting
+
+**Problem**: Zero rate limiting anywhere. Auth endpoints, billing endpoints, and webhook endpoints are all vulnerable to brute force and abuse.
+
+##### [MODIFY] [promptline-api/index.js](file:///e:/promptline-new/promptline-api/index.js)
+Add `@fastify/rate-limit`:
+```javascript
+await fastify.register(import('@fastify/rate-limit'), {
+  max: 100,        // 100 req/min per IP globally
+  timeWindow: '1 minute',
+});
+// Override on webhook routes: higher limit for Twilio bursts
+// Override on sensitive routes: lower limit
+```
+
+##### [NEW] `promptline-secure/api/_middleware.ts` (Vercel Edge Middleware)
+##### [NEW] `promptline-admin/api/_middleware.ts`
+Rate limit auth-related routes at the Vercel edge:
+- Login attempts: 10/min per IP
+- Signup: 5/min per IP
+- Password reset: 3/min per IP
+
+---
+
+#### 2.3 Secure Session Handling
+
+**Problem**: The Secure app's [AuthProvider](file:///e:/promptline-new/promptline-secure/src/auth/AuthProvider.tsx#L94-L108) caches `roles` and `currentTenantId` in `localStorage`. While RLS protects server-side, a tampered role array could show/hide UI elements incorrectly (information disclosure).
+
+##### [MODIFY] [AuthProvider.tsx](file:///e:/promptline-new/promptline-secure/src/auth/AuthProvider.tsx) (Secure)
+- Remove `localStorage` caching of roles — always fetch fresh from `fetchCurrentUserRoles()` on session load
+- Keep tenant ID in `sessionStorage` instead of `localStorage` (scoped to tab, cleared on close)
+- Add idle timeout detection (optional, configurable)
+
+##### [MODIFY] [AuthProvider.tsx](file:///e:/promptline-new/promptline-admin/src/auth/AuthProvider.tsx) (Admin)
+- Add session idle timeout (30 min recommended for internal admin tool)
+- Auto-redirect to login on timeout
+
+---
+
+#### 2.4 Admin Impersonation Hardening
+
+**Problem**: [impersonate.js](file:///e:/promptline-new/promptline-admin/api/admin/impersonate.js) lets admins mint magic-link tokens for any user. Protected by `requireAdmin()`, but lacks audit trail of **who** was impersonated.
+
+##### [MODIFY] [impersonate.js](file:///e:/promptline-new/promptline-admin/api/admin/impersonate.js)
+- Log every impersonation to `admin_activity_log` with: admin user ID, target user email, timestamp, IP address
+- Consider adding an `is_impersonation` flag in the minted session metadata so the Secure app can display an impersonation banner
+
+---
+
+#### 2.5 Webhook Signature Verification (Edge Functions)
+
+**Problem**: External services call edge functions directly. We need to verify they're really from the expected service.
+
+##### [MODIFY] [paypal-webhook/index.ts](file:///e:/promptline-new/promptline-secure/supabase/functions/paypal-webhook/index.ts) — audit existing verification
+##### [MODIFY] [eleven-post-call/index.ts](file:///e:/promptline-new/promptline-secure/supabase/functions/eleven-post-call/index.ts) — add ElevenLabs HMAC check
+##### [MODIFY] [sms-inbound/index.ts](file:///e:/promptline-new/promptline-secure/supabase/functions/sms-inbound/index.ts) — add Twilio signature validation
+##### [MODIFY] [sms-status/index.ts](file:///e:/promptline-new/promptline-secure/supabase/functions/sms-status/index.ts) — add Twilio signature validation
+##### [MODIFY] [voice-status/index.ts](file:///e:/promptline-new/promptline-secure/supabase/functions/voice-status/index.ts) — add Twilio signature validation
+
+---
+
+#### 2.6 CORS on API Server
+
+**Problem**: The Fastify API server ([index.js](file:///e:/promptline-new/promptline-api/index.js)) has no CORS configuration at all — it implicitly allows everything.
+
+##### [MODIFY] [index.js](file:///e:/promptline-new/promptline-api/index.js)
+Add `@fastify/cors` with an allowlist:
+```javascript
+await fastify.register(import('@fastify/cors'), {
+  origin: [
+    'https://secure.promptline.app',
+    'https://secure.sandbox.promptline.app',
+    'https://admin.promptline.app',
+    'https://admin.sandbox.promptline.app',
+    /^http:\/\/localhost:\d+$/,  // local dev
+  ],
+  credentials: true,
+});
+```
+
+---
+
+### Phase 3 — Medium Priority (P2) 🟡
+
+Defense-in-depth and operational security.
+
+---
+
+#### 3.1 Dependency Vulnerability Scanning
+
+##### [ACTION] Immediate + CI integration
+- Run `npm audit --audit-level=high` on all 4 projects now
+- Add to CI pipeline (GitHub Actions) as a required check
+- Enable GitHub Dependabot alerts on all repos
+
+---
+
+#### 3.2 Error Message Sanitization
+
+**Problem**: Some error handlers return raw error messages from Supabase, Twilio, PayPal to the client. These can leak internal column names, service URLs, or stack traces.
+
+##### [MODIFY] Edge functions + API server
+- Standardize error responses: `{ error: "User-friendly message", code: "ERROR_CODE" }`
+- Map known error types to safe messages
+- Log full error details to Sentry only (already in place via `reportError()`)
+- Never pass `error.message` from third-party SDKs directly to the client
+
+---
+
+#### 3.3 Security Monitoring & Alerting
+
+##### [MODIFY] Sentry configs across all projects
+- Create Sentry alerts for: repeated 401/403 responses, unusual API call volumes, failed webhook verifications
+- Add `security_event` tag to auth-related Sentry captures
+- Consider adding a daily digest of auth failures
+
+---
+
+#### 3.4 Client-Side Token Cleanup
+
+**Problem**: The Secure [signOut](file:///e:/promptline-new/promptline-secure/src/auth/AuthProvider.tsx#L317-L362) manually scrubs `localStorage` looking for keys containing `auth-token` and `access_token`. This is fragile.
+
+##### [MODIFY] [AuthProvider.tsx](file:///e:/promptline-new/promptline-secure/src/auth/AuthProvider.tsx#L317-L362) (Secure)
+- Use `supabase.auth.signOut({ scope: 'global' })` to revoke ALL sessions server-side
+- Clear all `promptline.*` localStorage keys explicitly
+- Remove the fragile JSON-parse-and-scrub loop
+
+---
+
+#### 3.5 API Key Scoping & Billing Alerts
+
+##### [ACTION] Operational
+- Set usage limits on the shared OpenAI API key (per environment)
+- Set billing alerts on: Twilio, ElevenLabs, SendGrid, OpenAI
+- Consider per-tenant API key isolation for OpenAI (longer term)
+
+---
+
+#### 3.6 Marketing Site Hardening (Answers Now)
+
+**Problem**: [Answers Now](file:///e:/promptline-new/prompt-line-answers-now/src/App.tsx) has a public contact form but no bot protection.
+
+##### [MODIFY] Contact form page
+- Add CAPTCHA (reCAPTCHA v3 or Cloudflare Turnstile)
+- Add honeypot field for basic bot detection
+- Rate limit form submissions server-side
+
+---
+
+### Phase 4 — Best Practices (P3) 🟢
+
+Long-term security posture.
+
+---
+
+#### 4.1 Enable MFA for Admin Users
+- Enforce TOTP 2FA for all admin accounts via Supabase Auth MFA
+- Add enrollment flow to admin login page
+
+#### 4.2 GitHub Secret Scanning
+- Enable GitHub Advanced Security secret scanning on all repos
+- Add pre-commit hook with `gitleaks` to prevent accidental secret commits
+- Add `.gitleaks.toml` config
+
+#### 4.3 Security-Focused E2E Tests
+- Test CORS: verify cross-origin requests from unauthorized domains are rejected
+- Test auth flows: login, session expiry, role-guarded routes
+- Test webhook signature rejection with tampered payloads
+- Test rate limiting triggers 429 responses
+
+#### 4.4 Security Documentation
+- Document auth architecture across all 4 products
+- Create secret rotation runbook (which Vercel projects, which Supabase secrets to update)
+- Incident response playbook
+
+---
+
+## Summary Table
+
+| # | Issue | Severity | Product(s) | Effort |
+|---|-------|----------|------------|--------|
+| 1.1 | CORS wildcard on 47+ edge functions | 🔴 Critical | Secure, Admin | 2-3 days |
+| 1.2 | No API auth / webhook verification | 🔴 Critical | API | 2 days |
+| 1.3 | Input validation gaps | 🔴 Critical | All | 3 days |
+| 1.4 | Secret rotation verification | 🔴 Critical | All | 1 day |
+| 2.1 | No CSP / security headers | 🟠 High | All frontends | 1 day |
+| 2.2 | No rate limiting | 🟠 High | API, frontends | 2 days |
+| 2.3 | Insecure session storage | 🟠 High | Secure, Admin | 1-2 days |
+| 2.4 | Impersonation audit trail | 🟠 High | Admin | 1 day |
+| 2.5 | Webhook signature verification | 🟠 High | Edge functions | 1-2 days |
+| 2.6 | API server CORS | 🟠 High | API | 0.5 day |
+| 3.1 | Dependency scanning | 🟡 Medium | All | 1 day |
+| 3.2 | Error message sanitization | 🟡 Medium | All | 1-2 days |
+| 3.3 | Security monitoring | 🟡 Medium | All | 1 day |
+| 3.4 | Token cleanup on sign-out | 🟡 Medium | Secure, Admin | 0.5 day |
+| 3.5 | API key scoping & alerts | 🟡 Medium | API | 1 day |
+| 3.6 | Marketing site hardening | 🟡 Medium | Answers Now | 1 day |
+| 4.1 | Admin MFA | 🟢 Best Practice | Admin | 2-3 days |
+| 4.2 | GitHub secret scanning | 🟢 Best Practice | All | 1 day |
+| 4.3 | Security E2E tests | 🟢 Best Practice | All | 3-5 days |
+| 4.4 | Security documentation | 🟢 Best Practice | All | 2 days |
+
+**Estimated Total Effort**: ~4-5 weeks (one engineer), or ~2 weeks with parallel work.
+
+---
+
+## Recommended Execution Order
+
+| Week | Focus | Items |
+|------|-------|-------|
+| **Week 1** | 🔴 Secrets + CORS + Headers | 1.4 Secret rotation check → 1.1 CORS tightening → 2.1 Security headers → 2.6 API CORS |
+| **Week 2** | 🔴🟠 Auth + Webhooks + Rate Limiting | 1.2 API auth middleware → 2.5 Webhook signatures → 2.2 Rate limiting |
+| **Week 3** | 🔴🟠 Validation + Sessions + Impersonation | 1.3 Input validation → 2.3 Session security → 2.4 Impersonation audit |
+| **Week 4** | 🟡 Hardening + Monitoring | 3.1 Dependency scan → 3.2 Error sanitization → 3.3 Monitoring → 3.4-3.6 Remaining |
+| **Week 5** | 🟢 Best Practices | 4.1 MFA → 4.2 Secret scanning → 4.3 E2E tests → 4.4 Docs |

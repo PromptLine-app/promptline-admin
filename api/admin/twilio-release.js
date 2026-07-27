@@ -10,6 +10,7 @@
 // Auth: requireAdmin (admin role, not viewer)
 
 import { requireAdmin } from "../_lib/adminAuth.js";
+import { createClient } from "@supabase/supabase-js";
 
 function twilioAuth(sid, token) {
   return "Basic " + Buffer.from(`${sid}:${token}`).toString("base64");
@@ -30,7 +31,7 @@ export default async function handler(req, res) {
       typeof req.body === "string"
         ? JSON.parse(req.body || "{}")
         : req.body || {};
-    const { numberSid, accountSid } = body;
+    const { numberSid, accountSid, phoneNumber } = body;
 
     if (!numberSid || !accountSid) {
       return res
@@ -86,6 +87,49 @@ export default async function handler(req, res) {
     console.log(
       `[twilio-release] Successfully released ${numberSid} from ${accountSid}`
     );
+
+    // If we have the phoneNumber string, remove it from the Supabase DB(s)
+    if (phoneNumber) {
+      const dbs = [
+        {
+          url: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+          key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+        },
+        {
+          url: process.env.OTHER_SUPABASE_URL,
+          key: process.env.OTHER_SUPABASE_SERVICE_KEY,
+        },
+      ];
+
+      for (const db of dbs) {
+        if (!db.url || !db.key) continue;
+        try {
+          const client = createClient(db.url, db.key, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          const { error } = await client
+            .from("tenant_operational_profiles")
+            .update({ twillio_phone: null })
+            .eq("twillio_phone", phoneNumber);
+          if (error) {
+            console.warn(
+              `[twilio-release] Failed to update DB ${db.url}:`,
+              error.message
+            );
+          } else {
+            console.log(
+              `[twilio-release] Cleared phone ${phoneNumber} in DB ${db.url}`
+            );
+          }
+        } catch (dbErr) {
+          console.warn(
+            `[twilio-release] DB connection error for ${db.url}:`,
+            dbErr.message
+          );
+        }
+      }
+    }
+
     return res.status(200).json({
       success: true,
       released: numberSid,
