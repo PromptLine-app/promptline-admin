@@ -373,6 +373,7 @@ export const TwilioUsagePage = () => {
       await adminApi('/api/admin/twilio-release', 'POST', {
         numberSid: releaseTarget.numberSid,
         accountSid: releaseTarget.accountSid,
+        phoneNumber: releaseTarget.phoneNumber,
       });
       setReleaseSuccess(releaseTarget.phoneNumber);
       setReleaseTarget(null);
