@@ -1,4 +1,5 @@
 import { adminApi } from '@/lib/adminApi';
+import { getCustomerAppUrl } from '@/lib/customerAppUrl';
 
 /**
  * "Open customer view" — asks the server to mint a one-time magic-link for a
@@ -14,5 +15,8 @@ import { adminApi } from '@/lib/adminApi';
 export async function openCustomerView(
   tenantId: string,
 ): Promise<{ action_link: string; email: string }> {
-  return adminApi('/api/admin/impersonate', 'POST', { tenantId });
+  return adminApi('/api/admin/impersonate', 'POST', {
+    tenantId,
+    customerAppUrl: getCustomerAppUrl(),
+  });
 }

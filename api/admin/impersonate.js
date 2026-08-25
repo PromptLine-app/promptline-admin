@@ -10,11 +10,7 @@
 // allow-listed in the czqth Supabase auth settings for the magic link to land).
 
 import { getAdminClient, requireAdmin } from "../_lib/adminAuth.js";
-
-const CUSTOMER_APP_URL =
-  process.env.CUSTOMER_APP_URL ||
-  process.env.VITE_CUSTOMER_APP_URL ||
-  "https://secure.promptline.app";
+import { resolveCustomerAppUrl } from "../_lib/customerAppUrl.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -22,7 +18,7 @@ export default async function handler(req, res) {
     await requireAdmin(req);
 
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-    const { tenantId } = body;
+    const { tenantId, customerAppUrl } = body;
     if (!tenantId) return res.status(400).json({ error: "Missing tenantId" });
 
     const admin = getAdminClient();
@@ -44,7 +40,8 @@ export default async function handler(req, res) {
     if (!email) return res.status(404).json({ error: "Owner has no login email" });
 
     // Trailing slash so the redirect matches a `https://host/**` allow-list entry.
-    const redirectTo = CUSTOMER_APP_URL.endsWith("/") ? CUSTOMER_APP_URL : `${CUSTOMER_APP_URL}/`;
+    const customerAppBase = resolveCustomerAppUrl(req, customerAppUrl);
+    const redirectTo = `${customerAppBase}/`;
     const { data, error } = await admin.auth.admin.generateLink({
       type: "magiclink",
       email,
