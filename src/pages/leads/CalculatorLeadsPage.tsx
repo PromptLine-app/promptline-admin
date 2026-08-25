@@ -1,15 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/config/supabase';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
-import { StatusBadge } from '@/components/common/StatusBadge';
 import { useToast } from '@/components/common/Toast';
 import { reportError } from '@/lib/sentry';
 import {
   FiRefreshCw,
   FiDownload,
-  FiMail,
-  FiEdit2,
   FiX,
   FiTrendingUp,
   FiUsers,
@@ -41,14 +38,6 @@ type CalculatorLead = {
 };
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'converted', 'lost'];
-
-const statusVariantMap: Record<string, 'info' | 'warning' | 'success' | 'danger' | 'neutral'> = {
-  new: 'info',
-  contacted: 'warning',
-  qualified: 'warning',
-  converted: 'success',
-  lost: 'danger',
-};
 
 const fmt = (n: number) =>
   '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -91,7 +80,7 @@ export const CalculatorLeadsPage = () => {
     } catch (err) {
       console.error('Error fetching calculator leads:', err);
       reportError(err, { where: 'CalculatorLeadsPage.fetchLeads' });
-      toast({ type: 'error', message: 'Failed to load calculator leads.' });
+      toast('Failed to load calculator leads.', 'error');
     } finally {
       setLoading(false);
     }
@@ -103,16 +92,24 @@ export const CalculatorLeadsPage = () => {
 
   /* ── Summary stats ─────────────────────────────────────────────── */
 
-  const totalLeads = leads.length;
-  const oneWeekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-  const thisWeekLeads = leads.filter((l) => l.created_at >= oneWeekAgo).length;
-  const avgMonthlyLoss =
-    totalLeads > 0
-      ? Math.round(leads.reduce((s, l) => s + l.monthly_loss, 0) / totalLeads)
-      : 0;
-  const convertedCount = leads.filter((l) => l.status === 'converted').length;
-  const conversionRate =
-    totalLeads > 0 ? Math.round((convertedCount / totalLeads) * 100) : 0;
+  const { totalLeads, thisWeekLeads, avgMonthlyLoss, conversionRate } = useMemo(() => {
+    const total = leads.length;
+    const oneWeekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const thisWeek = leads.filter((l) => l.created_at >= oneWeekAgo).length;
+    const avgLoss =
+      total > 0
+        ? Math.round(leads.reduce((s, l) => s + l.monthly_loss, 0) / total)
+        : 0;
+    const converted = leads.filter((l) => l.status === 'converted').length;
+    const convRate = total > 0 ? Math.round((converted / total) * 100) : 0;
+
+    return {
+      totalLeads: total,
+      thisWeekLeads: thisWeek,
+      avgMonthlyLoss: avgLoss,
+      conversionRate: convRate,
+    };
+  }, [leads]);
 
   /* ── Detail modal handlers ─────────────────────────────────────── */
 
@@ -143,7 +140,7 @@ export const CalculatorLeadsPage = () => {
 
       if (error) throw error;
 
-      toast({ type: 'success', message: 'Lead updated.' });
+      toast('Lead updated.', 'success');
       setLeads((prev) =>
         prev.map((l) =>
           l.id === selectedLead.id
@@ -154,7 +151,7 @@ export const CalculatorLeadsPage = () => {
       closeDetail();
     } catch (err) {
       reportError(err, { where: 'CalculatorLeadsPage.handleSaveDetail' });
-      toast({ type: 'error', message: 'Failed to update lead.' });
+      toast('Failed to update lead.', 'error');
     } finally {
       setSaving(false);
     }
@@ -178,7 +175,7 @@ export const CalculatorLeadsPage = () => {
       );
     } catch (err) {
       reportError(err, { where: 'CalculatorLeadsPage.handleQuickStatus' });
-      toast({ type: 'error', message: 'Failed to update status.' });
+      toast('Failed to update status.', 'error');
     }
   };
 
