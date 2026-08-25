@@ -26,6 +26,7 @@ import { TeamPage } from '@/pages/team/TeamPage';
 import { ActivityLogPage } from '@/pages/activity/ActivityLogPage';
 import { UserFollowupsPage } from '@/pages/users/UserFollowupsPage';
 import { ContactRequestsPage } from '@/pages/users/ContactRequestsPage';
+import { CalculatorLeadsPage } from '@/pages/leads/CalculatorLeadsPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import ZohoCallbackPage from '@/pages/auth/ZohoCallbackPage';
 import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
@@ -139,6 +140,7 @@ export default function App() {
         <Route path="promos" element={<PromoCodesPage />} />
         <Route path="team" element={<TeamPage />} />
         <Route path="contact-requests" element={<ContactRequestsPage />} />
+        <Route path="calculator-leads" element={<CalculatorLeadsPage />} />
         <Route path="followups" element={<UserFollowupsPage />} />
         <Route path="activity" element={<ActivityLogPage />} />
         
