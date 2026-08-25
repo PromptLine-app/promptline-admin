@@ -281,18 +281,22 @@ export const CalculatorLeadsPage = () => {
           value={row.status}
           onChange={(e) => handleQuickStatus(row, e.target.value)}
           style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
+            background: '#1e293b',
+            border: '1px solid #334155',
             borderRadius: '6px',
             padding: '4px 8px',
             fontSize: '0.8rem',
-            color: 'var(--text)',
+            color: '#f8fafc',
             cursor: 'pointer',
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
+            <option
+              key={s}
+              value={s}
+              style={{ background: '#0f172a', color: '#f8fafc' }}
+            >
               {s.charAt(0).toUpperCase() + s.slice(1)}
             </option>
           ))}
@@ -507,9 +511,10 @@ export const CalculatorLeadsPage = () => {
                   value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
                   className="form-input"
+                  style={{ background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' }}
                 >
                   {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
+                    <option key={s} value={s} style={{ background: '#0f172a', color: '#f8fafc' }}>
                       {s.charAt(0).toUpperCase() + s.slice(1)}
                     </option>
                   ))}
