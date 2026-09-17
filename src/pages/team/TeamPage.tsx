@@ -162,19 +162,25 @@ export const TeamPage = () => {
       cell: (row) => new Date(row.created_at).toLocaleDateString(),
     },
     {
+    {
       header: 'Portal Access',
       id: 'portal_access',
+      cell: (row) => {
         const b = row.has_business_access;
         const i = row.has_infra_access;
         const m = (row as any).has_marketing_access;
         const accessType =
-          b && i && m ? 'all' : b && i ? 'business_infra' : b && m ? 'business_marketing' : i && m ? 'infra_marketing' : i ? 'infra_only' : m ? 'marketing_only' : 'business_only';
-            
-            
+          b && i && m ? 'all' :
+          b && i      ? 'business_infra' :
+          b && m      ? 'business_marketing' :
+          i && m      ? 'infra_marketing' :
+          i           ? 'infra_only' :
+          m           ? 'marketing_only' :
+                        'business_only';
         return (
+          <select
+            className="form-input"
             style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '175px', minHeight: '32px' }}
-            className="form-input" 
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '130px', minHeight: '32px' }}
             value={accessType}
             onChange={(e) => handleChangePortalAccess(row, e.target.value)}
           >
@@ -188,6 +194,7 @@ export const TeamPage = () => {
           </select>
         );
       },
+    },
     },
     {
       header: 'Actions',
