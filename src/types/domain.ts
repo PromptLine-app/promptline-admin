@@ -1,4 +1,4 @@
-/* === Domain Types for Admin Dashboard === */
+﻿/* === Domain Types for Admin Dashboard === */
 
 export type AdminRole = 'admin' | 'viewer';
 
@@ -11,6 +11,7 @@ export type AdminUser = {
   is_active: boolean;
   has_business_access: boolean;
   has_infra_access: boolean;
+  has_marketing_access: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -173,3 +174,64 @@ export const formatUsd = (cents: number): string =>
     minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })}`;
+
+/* === Marketing Email Dashboard Types === */
+
+export type MarketingSender = {
+  id: string;
+  display_name: string;
+  email: string;
+  is_connected: boolean;
+  zoho_account_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailTemplate = {
+  id: string;
+  name: string;
+  category: 'follow_up' | 'demo' | 'announcement' | 'general';
+  subject: string;
+  body_html: string;
+  body_text: string | null;
+  variables: string[];
+  is_starter: boolean;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailContact = {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  lead_source: 'calculator_lead' | 'contact_request' | 'user_followup' | 'csv_import' | 'manual';
+  source_id: string | null;
+  tags: string[];
+  status: 'active' | 'unsubscribed' | 'bounced';
+  monthly_loss: number | null;
+  industry: string | null;
+  notes: string | null;
+  last_emailed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailSend = {
+  id: string;
+  sender_id: string;
+  template_id: string | null;
+  contact_id: string | null;
+  recipient_email: string;
+  subject: string;
+  body_html: string;
+  status: 'sent' | 'failed' | 'pending';
+  error_message: string | null;
+  sent_by: string | null;
+  sent_at: string;
+};
+

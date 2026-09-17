@@ -1,14 +1,29 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
-import { FiSun, FiMoon, FiLogOut, FiUser, FiServer, FiBriefcase } from 'react-icons/fi';
+import { FiSun, FiMoon, FiLogOut, FiUser, FiServer, FiBriefcase, FiMail, FiChevronDown } from 'react-icons/fi';
+
+type Portal = 'business' | 'infra' | 'marketing';
 
 export const TopNav = () => {
-  const { adminUser, signOut, hasBusinessAccess, hasInfraAccess } = useAuth();
+  const { adminUser, signOut, hasBusinessAccess, hasInfraAccess, hasMarketingAccess } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
   const isOnInfra = location.pathname.startsWith('/infra');
-  const showPortalToggle = hasBusinessAccess && hasInfraAccess;
+  const isOnMarketing = location.pathname.startsWith('/marketing');
+
+  const currentPortal: Portal = isOnInfra ? 'infra' : isOnMarketing ? 'marketing' : 'business';
+
+  // Count how many portals the user can access
+  const availablePortals: { label: string; icon: React.ReactNode; path: string; key: Portal }[] = [
+    ...(hasBusinessAccess ? [{ label: 'Business', icon: <FiBriefcase />, path: '/', key: 'business' as Portal }] : []),
+    ...(hasInfraAccess ? [{ label: 'Infrastructure', icon: <FiServer />, path: '/infra', key: 'infra' as Portal }] : []),
+    ...(hasMarketingAccess ? [{ label: 'Marketing', icon: <FiMail />, path: '/marketing', key: 'marketing' as Portal }] : []),
+  ];
+
+  const showPortalSwitcher = availablePortals.length > 1;
+  const [showPortalMenu, setShowPortalMenu] = useState(false);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
@@ -30,39 +45,51 @@ export const TopNav = () => {
     setTheme(t => t === 'light' ? 'dark' : 'light');
   };
 
-  const handlePortalSwitch = () => {
-    if (isOnInfra) {
-      navigate('/');
-    } else {
-      navigate('/infra');
-    }
-  };
-
-  // Close menu on click outside
+  // Close menus on click outside
   useEffect(() => {
-    if (!showUserMenu) return;
-    const handleOutside = () => setShowUserMenu(false);
+    if (!showUserMenu && !showPortalMenu) return;
+    const handleOutside = () => { setShowUserMenu(false); setShowPortalMenu(false); };
     document.addEventListener('click', handleOutside);
     return () => document.removeEventListener('click', handleOutside);
-  }, [showUserMenu]);
+  }, [showUserMenu, showPortalMenu]);
+
+  const currentPortalInfo = availablePortals.find(p => p.key === currentPortal);
 
   return (
     <header className="top-nav">
       <div className="top-nav__lead">
-        {/* Placeholder for potential breadcrumbs or mobile menu toggle */}
+        {/* Breadcrumbs placeholder */}
       </div>
 
       <div className="top-nav__actions">
-        {showPortalToggle && (
-          <button
-            onClick={handlePortalSwitch}
-            className="btn btn--secondary btn--sm"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
-            title={isOnInfra ? 'Switch to Business Portal' : 'Switch to Infrastructure Portal'}
-          >
-            {isOnInfra ? <FiBriefcase /> : <FiServer />}
-            {isOnInfra ? 'Business' : 'Infrastructure'}
-          </button>
+        {showPortalSwitcher && (
+          <div className="portal-switcher-wrapper" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowPortalMenu(s => !s)}
+              className="btn btn--secondary btn--sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+              title="Switch portal"
+            >
+              {currentPortalInfo?.icon}
+              {currentPortalInfo?.label}
+              <FiChevronDown style={{ opacity: 0.6 }} />
+            </button>
+
+            {showPortalMenu && (
+              <div className="portal-switcher-dropdown">
+                {availablePortals.map((portal) => (
+                  <button
+                    key={portal.key}
+                    className={`portal-switcher-item ${portal.key === currentPortal ? 'is-active' : ''}`}
+                    onClick={() => { navigate(portal.path); setShowPortalMenu(false); }}
+                  >
+                    {portal.icon}
+                    {portal.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         <button onClick={toggleTheme} className="icon-button" title="Toggle theme">
@@ -70,7 +97,7 @@ export const TopNav = () => {
         </button>
 
         <div className="user-menu-wrapper" onClick={(e) => e.stopPropagation()}>
-          <button 
+          <button
             className="user-pill-button"
             onClick={() => setShowUserMenu(s => !s)}
           >
@@ -91,7 +118,7 @@ export const TopNav = () => {
                 <p className="user-menu__name">{adminUser?.full_name || 'Admin'}</p>
                 <p className="user-menu__email">{adminUser?.email}</p>
               </div>
-              
+
               <button onClick={signOut} className="user-menu__logout">
                 Sign Out <FiLogOut />
               </button>
@@ -102,4 +129,3 @@ export const TopNav = () => {
     </header>
   );
 };
-

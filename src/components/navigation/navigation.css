@@ -242,3 +242,116 @@
 .user-menu__logout:hover {
   background: rgba(239, 68, 68, 0.1);
 }
+
+/* === Portal Switcher Dropdown === */
+.portal-switcher-wrapper {
+  position: relative;
+}
+
+.portal-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  min-width: 180px;
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--elevation-2);
+  z-index: 100;
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.portal-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: calc(var(--radius) * 0.7);
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s;
+}
+
+.portal-switcher-item:hover {
+  background: hsl(var(--secondary));
+}
+
+.portal-switcher-item.is-active {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+/* === Modal Overlay === */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modal {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  width: 100%;
+  box-shadow: var(--elevation-2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* === Form helpers === */
+.form-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) * 0.7);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-family: var(--font-main);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.15);
+}
+
+.form-input option,
+.form-input select option {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.dark .form-input,
+.dark .form-input option {
+  background: #0f172a;
+  color: #f8fafc;
+}
