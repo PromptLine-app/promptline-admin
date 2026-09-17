@@ -116,6 +116,7 @@ export const TeamPage = () => {
 
   const handleChangePortalAccess = async (user: AdminUser, accessType: string) => {
     try {
+      const updates = {
         has_business_access: ['business_only', 'business_infra', 'business_marketing', 'all'].includes(accessType),
         has_infra_access:    ['infra_only',    'business_infra', 'infra_marketing',     'all'].includes(accessType),
         has_marketing_access:['marketing_only','business_marketing','infra_marketing',  'all'].includes(accessType),
@@ -162,7 +163,6 @@ export const TeamPage = () => {
       cell: (row) => new Date(row.created_at).toLocaleDateString(),
     },
     {
-    {
       header: 'Portal Access',
       id: 'portal_access',
       cell: (row) => {
@@ -194,7 +194,6 @@ export const TeamPage = () => {
           </select>
         );
       },
-    },
     },
     {
       header: 'Actions',
