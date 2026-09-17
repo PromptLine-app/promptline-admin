@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { supabase } from '@/config/supabase';
 import { AdminOnly } from '@/auth/AdminOnly';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -307,3 +307,4 @@ export const TeamPage = () => {
     </div>
   );
 };
+
