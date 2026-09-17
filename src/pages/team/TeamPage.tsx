@@ -116,9 +116,9 @@ export const TeamPage = () => {
 
   const handleChangePortalAccess = async (user: AdminUser, accessType: string) => {
     try {
-      const updates = {
-        has_business_access: accessType === 'business_only' || accessType === 'both',
-        has_infra_access: accessType === 'infra_only' || accessType === 'both',
+        has_business_access: ['business_only', 'business_infra', 'business_marketing', 'all'].includes(accessType),
+        has_infra_access:    ['infra_only',    'business_infra', 'infra_marketing',     'all'].includes(accessType),
+        has_marketing_access:['marketing_only','business_marketing','infra_marketing',  'all'].includes(accessType),
       };
       const { error } = await supabase
         .from('admin_users')
@@ -164,15 +164,15 @@ export const TeamPage = () => {
     {
       header: 'Portal Access',
       id: 'portal_access',
-      cell: (row) => {
-        const accessType = row.has_business_access && row.has_infra_access 
-          ? 'both' 
-          : row.has_infra_access 
-            ? 'infra_only' 
-            : 'business_only';
+        const b = row.has_business_access;
+        const i = row.has_infra_access;
+        const m = (row as any).has_marketing_access;
+        const accessType =
+          b && i && m ? 'all' : b && i ? 'business_infra' : b && m ? 'business_marketing' : i && m ? 'infra_marketing' : i ? 'infra_only' : m ? 'marketing_only' : 'business_only';
+            
             
         return (
-          <select 
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '175px', minHeight: '32px' }}
             className="form-input" 
             style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '130px', minHeight: '32px' }}
             value={accessType}
@@ -180,7 +180,11 @@ export const TeamPage = () => {
           >
             <option value="business_only">Business Only</option>
             <option value="infra_only">Infra Only</option>
-            <option value="both">Both Portals</option>
+            <option value="marketing_only">Marketing Only</option>
+            <option value="business_infra">Business + Infra</option>
+            <option value="business_marketing">Business + Marketing</option>
+            <option value="infra_marketing">Infra + Marketing</option>
+            <option value="all">All Portals</option>
           </select>
         );
       },
