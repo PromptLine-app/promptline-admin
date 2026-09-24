@@ -4,8 +4,10 @@ import { useAuth } from '@/auth/useAuth';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { AdminGuard } from '@/auth/AdminGuard';
 import { InfraGuard } from '@/auth/InfraGuard';
+import { MarketingGuard } from '@/auth/MarketingGuard';
 import { SideNav } from '@/components/navigation/SideNav';
 import { InfraSideNav } from '@/components/navigation/InfraSideNav';
+import { MarketingSideNav } from '@/components/navigation/MarketingSideNav';
 import { TopNav } from '@/components/navigation/TopNav';
 
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
@@ -33,6 +35,13 @@ import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
 import { ExternalServicesPage } from '@/pages/infra/ExternalServicesPage';
 import { TwilioUsagePage } from '@/pages/infra/TwilioUsagePage';
 import { SentryPage } from '@/pages/infra/SentryPage';
+
+// Marketing Portal pages
+import { MarketingDashboardPage } from '@/pages/marketing/MarketingDashboardPage';
+import { TemplatesPage } from '@/pages/marketing/TemplatesPage';
+import { ContactsPage } from '@/pages/marketing/ContactsPage';
+import { SendEmailPage } from '@/pages/marketing/SendEmailPage';
+import { SendersPage } from '@/pages/marketing/SendersPage';
 
 
 const ErrorFallback = () => (
@@ -96,6 +105,21 @@ const InfraLayout = () => {
   );
 };
 
+/** Marketing portal layout — uses MarketingSideNav */
+const MarketingLayout = () => {
+  return (
+    <div className="app-layout">
+      <MarketingSideNav />
+      <div className="app-main">
+        <TopNav />
+        <main className="app-content">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const { initializing } = useAuth();
 
@@ -113,7 +137,7 @@ export default function App() {
         element={<ResetPasswordPage />}
       />
 
-      {/* ── Business Portal ── */}
+      {/* 🏢 Business Portal 🏢 */}
       <Route
         path="/"
         element={
@@ -147,7 +171,7 @@ export default function App() {
         <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>404 Not Found</h3><p>The page you're looking for doesn't exist.</p></div></div>} />
       </Route>
 
-      {/* ── Infrastructure Portal ── */}
+      {/* 🖥️ Infrastructure Portal 🖥️ */}
       <Route
         path="/infra"
         element={
@@ -165,7 +189,25 @@ export default function App() {
         <Route path="database" element={<div className="page-card"><div className="empty-state"><h3>Database</h3><p>Database monitoring coming soon.</p></div></div>} />
         <Route path="security" element={<div className="page-card"><div className="empty-state"><h3>Security</h3><p>Security monitoring coming soon.</p></div></div>} />
         <Route path="sentry" element={<SentryPage />} />
+      </Route>
 
+      {/* 📧 Marketing Portal 📧 */}
+      <Route
+        path="/marketing"
+        element={
+          <AdminGuard>
+            <MarketingGuard>
+              <MarketingLayout />
+            </MarketingGuard>
+          </AdminGuard>
+        }
+      >
+        <Route index element={<MarketingDashboardPage />} />
+        <Route path="templates" element={<TemplatesPage />} />
+        <Route path="contacts" element={<ContactsPage />} />
+        <Route path="send" element={<SendEmailPage />} />
+        <Route path="senders" element={<SendersPage />} />
+        <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>Page Not Found</h3><p>This marketing page doesn't exist.</p></div></div>} />
       </Route>
     </Routes>
     </Sentry.ErrorBoundary>

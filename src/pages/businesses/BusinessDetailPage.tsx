@@ -50,6 +50,7 @@ export const BusinessDetailPage = () => {
 
   // Dialogs & Modals
   const [showStatusConfirm, setShowStatusConfirm] = useState(false);
+  const [showOutreachConfirm, setShowOutreachConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showRetryConfirm, setShowRetryConfirm] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -177,6 +178,23 @@ export const BusinessDetailPage = () => {
       reportError(error, { where: 'BusinessDetailPage.handleToggleStatus' });
       console.error('Error toggling status:', error);
       toast('Failed to update agent status', 'error');
+    }
+  };
+
+  const handleToggleOutreach = async () => {
+    if (!business || !id) return;
+    try {
+      const newStatus = !business.outreach_enabled;
+      const { error } = await supabase.from('tenants').update({ outreach_enabled: newStatus }).eq('id', id);
+      if (error) throw error;
+      await logActivity('toggle_outreach_status', { outreach_enabled: newStatus });
+      toast(`Outreach feature successfully ${newStatus ? 'enabled' : 'disabled'}.`);
+      setShowOutreachConfirm(false);
+      fetchDetails();
+    } catch (error) {
+      reportError(error, { where: 'BusinessDetailPage.handleToggleOutreach' });
+      console.error('Error toggling outreach:', error);
+      toast('Failed to update outreach status', 'error');
     }
   };
 
@@ -590,6 +608,12 @@ export const BusinessDetailPage = () => {
                 {business.is_deleted ? <FiPhoneCall /> : <FiPhoneOff />}
                 {business.is_deleted ? 'Enable Agent' : 'Disable Agent'}
               </button>
+              <button
+                className={`btn ${!business.outreach_enabled ? 'btn--primary' : 'btn--warning'}`}
+                onClick={() => setShowOutreachConfirm(true)}
+              >
+                {!business.outreach_enabled ? 'Enable Outreach' : 'Disable Outreach'}
+              </button>
               {!business.twillio_phone && (
                 <button className="btn btn--secondary" onClick={handleProvisionNewNumber} disabled={busy}>
                   <FiRefreshCw /> Provision New Number
@@ -767,6 +791,16 @@ export const BusinessDetailPage = () => {
         confirmLabel={business.is_deleted ? 'Yes, Enable' : 'Yes, Disable'}
         onConfirm={handleToggleStatus}
         onCancel={() => setShowStatusConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showOutreachConfirm}
+        title={business.outreach_enabled ? 'Disable Outreach' : 'Enable Outreach'}
+        message={`Are you sure you want to ${business.outreach_enabled ? 'disable' : 'enable'} the outreach feature for ${business.company_name}?`}
+        isDestructive={business.outreach_enabled}
+        confirmLabel={business.outreach_enabled ? 'Yes, Disable' : 'Yes, Enable'}
+        onConfirm={handleToggleOutreach}
+        onCancel={() => setShowOutreachConfirm(false)}
       />
 
       <ConfirmDialog
