@@ -1,4 +1,4 @@
-﻿/* === Domain Types for Admin Dashboard === */
+/* === Domain Types for Admin Dashboard === */
 
 export type AdminRole = 'admin' | 'viewer';
 
@@ -23,6 +23,7 @@ export type Tenant = {
   twillio_phone: string | null;
   onboarded: boolean;
   is_deleted: boolean;
+  outreach_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
