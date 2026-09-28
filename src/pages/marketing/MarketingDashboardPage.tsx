@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
 import { FiMail, FiUsers, FiFileText, FiSend, FiTrendingUp, FiAlertCircle } from 'react-icons/fi';
@@ -156,8 +156,11 @@ export const MarketingDashboardPage = () => {
         <div className="page-card" style={{ padding: '1.5rem' }}>
           <h3 style={{ marginBottom: '1rem', fontWeight: 600 }}>Quick Actions</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <button className="btn btn--primary" onClick={() => navigate('/marketing/send')}>
-              <FiSend style={{ marginRight: '0.5rem' }} /> Compose & Send Email
+            <button className="btn btn--primary" onClick={() => navigate('/marketing/campaigns')}>
+              <FiSend style={{ marginRight: '0.5rem' }} /> Manage Campaigns
+            </button>
+            <button className="btn btn--secondary" onClick={() => navigate('/marketing/send')}>
+              <FiSend style={{ marginRight: '0.5rem' }} /> Compose Ad-Hoc Email
             </button>
             <button className="btn btn--secondary" onClick={() => navigate('/marketing/templates')}>
               <FiFileText style={{ marginRight: '0.5rem' }} /> Manage Templates

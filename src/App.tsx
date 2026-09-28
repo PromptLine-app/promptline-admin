@@ -42,6 +42,9 @@ import { TemplatesPage } from '@/pages/marketing/TemplatesPage';
 import { ContactsPage } from '@/pages/marketing/ContactsPage';
 import { SendEmailPage } from '@/pages/marketing/SendEmailPage';
 import { SendersPage } from '@/pages/marketing/SendersPage';
+import { CampaignsPage } from '@/pages/marketing/CampaignsPage';
+import { CampaignDetailPage } from '@/pages/marketing/CampaignDetailPage';
+import { SequencesPage } from '@/pages/marketing/SequencesPage';
 
 
 const ErrorFallback = () => (
@@ -203,6 +206,9 @@ export default function App() {
         }
       >
         <Route index element={<MarketingDashboardPage />} />
+        <Route path="campaigns" element={<CampaignsPage />} />
+        <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+        <Route path="sequences" element={<SequencesPage />} />
         <Route path="templates" element={<TemplatesPage />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="send" element={<SendEmailPage />} />
