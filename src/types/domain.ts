@@ -1,4 +1,4 @@
-﻿/* === Domain Types for Admin Dashboard === */
+/* === Domain Types for Admin Dashboard === */
 
 export type AdminRole = 'admin' | 'viewer';
 
@@ -213,6 +213,8 @@ export type EmailContact = {
   source_id: string | null;
   tags: string[];
   status: 'active' | 'unsubscribed' | 'bounced';
+  engagement_state: 'hot' | 'warm' | 'cold' | 'customer' | 'suppressed';
+  last_activity_at: string | null;
   monthly_loss: number | null;
   industry: string | null;
   notes: string | null;
@@ -234,4 +236,35 @@ export type EmailSend = {
   sent_by: string | null;
   sent_at: string;
 };
+export type MarketingCampaign = {
+  id: string;
+  name: string;
+  type: 'sequence' | 'broadcast';
+  status: 'draft' | 'sending' | 'live' | 'sent' | 'paused' | 'completed';
+  sender_email: string | null;
+  total_sent: number;
+  created_at: string;
+  updated_at: string;
+};
 
+export type CampaignStep = {
+  id: string;
+  campaign_id: string;
+  step_number: number;
+  subject: string;
+  body_html: string;
+  template_id: string | null;
+  wait_days: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CampaignEnrollment = {
+  id: string;
+  campaign_id: string;
+  contact_id: string;
+  current_step_number: number;
+  status: 'active' | 'completed' | 'exited' | 'suppressed';
+  next_run_at: string | null;
+  enrolled_at: string;
+};

@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PromptLine Marketing — Proposed v2</title>
+<meta name="description" content="Proposed upgrade to the PromptLine marketing dashboard. Illustrative sample data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ---------------------------------------------------------------------------
+   Design tokens lifted verbatim from admin.sandbox.promptline.app
+   (assets/index-ov6Y03eY.css) so this drops into the existing codebase.
+   Chart palette added on top, validated for CVD separation + contrast in both
+   modes against the real card surfaces.
+--------------------------------------------------------------------------- */
+:root{
+  color-scheme:light;
+  --primary:212 100% 47%; --primary-foreground:0 0% 98%;
+  --background:210 40% 98%; --foreground:222 47% 11%;
+  --card:0 0% 100%; --card-foreground:222 47% 11%;
+  --secondary:215 32% 94%; --secondary-foreground:222 47% 11%;
+  --muted:214 31% 91%; --muted-foreground:215 19% 35%;
+  --accent:216 82% 97%;
+  --destructive:0 84% 60%; --success:142 71% 45%; --warning:38 92% 50%;
+  --border:214 32% 87%; --input:214 32% 87%; --ring:212 100% 47%;
+  --radius:.75rem;
+  --sidebar-background:222 47% 11%; --sidebar-foreground:210 40% 98%;
+  --sidebar-primary:212 100% 47%; --sidebar-accent:220 36% 16%;
+  --sidebar-border:223 47% 11%;
+  --font-main:"Montserrat","Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+  --elevation-1:0 8px 24px rgba(15,23,42,.06);
+  --elevation-2:0 12px 40px rgba(15,23,42,.10);
+  /* chart palette — light mode, validated on #ffffff surface */
+  --c1:#1c6fd0; --c2:#0f8f62; --c3:#a86f00; --c4:#6d4ac9;
+  --seq1:#cfe0f6; --seq2:#9dc0ed; --seq3:#6b9fe3; --seq4:#3a80da; --seq5:#1c6fd0; --seq6:#12508f; --seq7:#0b3560;
+  --grid:rgba(15,23,42,.08); --axis:rgba(15,23,42,.45);
+  --surface-chart:#ffffff;
+}
+html.dark{
+  color-scheme:dark;
+  --background:224 29% 9%; --foreground:210 40% 98%;
+  --card:223 40% 12%; --card-foreground:210 40% 98%;
+  --primary:212 100% 50%; --primary-foreground:222 47% 11%;
+  --secondary:220 28% 18%; --secondary-foreground:210 40% 98%;
+  --muted:220 28% 18%; --muted-foreground:215 20% 70%;
+  --accent:219 22% 20%;
+  --destructive:0 70% 45%; --success:142 60% 42%; --warning:38 80% 48%;
+  --border:219 20% 25%; --input:219 20% 25%; --ring:212 100% 50%;
+  --sidebar-background:223 35% 8%; --sidebar-foreground:210 40% 98%;
+  --sidebar-primary:212 100% 55%; --sidebar-accent:223 30% 15%;
+  --sidebar-border:223 25% 18%;
+  --elevation-1:0 8px 24px rgba(0,0,0,.25);
+  --elevation-2:0 12px 40px rgba(0,0,0,.35);
+  /* chart palette — dark mode, validated on #12192b card surface */
+  --c1:#3d8ae8; --c2:#1baf7a; --c3:#bf8200; --c4:#8d6ae0;
+  --seq1:#14304f; --seq2:#1a4573; --seq3:#215b97; --seq4:#2872bd; --seq5:#3d8ae8; --seq6:#6da8ee; --seq7:#9cc5f4;
+  --grid:rgba(255,255,255,.07); --axis:rgba(255,255,255,.45);
+  --surface-chart:#12192b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font-main);
+  background:hsl(var(--background));
+  color:hsl(var(--foreground));
+  font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.muted{color:hsl(var(--muted-foreground))}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.sidebar{
+  background:hsl(var(--sidebar-background));color:hsl(var(--sidebar-foreground));
+  border-right:1px solid hsl(var(--sidebar-border));
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.brand{display:flex;align-items:center;gap:.6rem;padding:1.1rem 1.25rem;border-bottom:1px solid hsl(var(--sidebar-border))}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:hsl(var(--sidebar-primary));display:grid;place-items:center;font-weight:700;color:#fff;font-size:13px;flex:none}
+.brand b{display:block;font-size:14px;font-weight:700;letter-spacing:-.01em}
+.brand span{display:block;font-size:11px;opacity:.6}
+.navgroup{padding:.9rem 0 .2rem}
+.navgroup>p{font-size:10px;letter-spacing:.09em;text-transform:uppercase;opacity:.45;padding:0 1.25rem .45rem;font-weight:600}
+.navlink{display:flex;align-items:center;gap:.65rem;width:100%;text-align:left;padding:.55rem 1.25rem;font-size:13.5px;font-weight:500;opacity:.78;border-left:2px solid transparent}
+.navlink:hover{opacity:1;background:hsl(var(--sidebar-accent))}
+.navlink.on{opacity:1;background:hsl(var(--sidebar-accent));border-left-color:hsl(var(--sidebar-primary));font-weight:600}
+.navlink .ic{width:16px;height:16px;flex:none;opacity:.85}
+.navbadge{margin-left:auto;font-size:10px;font-weight:700;padding:.1rem .35rem;border-radius:5px;background:hsl(var(--sidebar-primary));color:#fff}
+.sidefoot{margin-top:auto;padding:1rem 1.25rem;font-size:11px;opacity:.5;border-top:1px solid hsl(var(--sidebar-border))}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  display:flex;align-items:center;gap:.6rem;padding:.7rem 1.5rem;
+  border-bottom:1px solid hsl(var(--border));background:hsl(var(--card));
+  position:sticky;top:0;z-index:30;
+}
+.topbar .grow{flex:1}
+.chip{
+  display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .7rem;border-radius:8px;
+  border:1px solid hsl(var(--border));background:hsl(var(--secondary));font-size:12.5px;font-weight:600;
+}
+.avatar{width:30px;height:30px;border-radius:50%;background:hsl(var(--primary));color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px}
+.whoami{line-height:1.15;text-align:right}
+.whoami b{font-size:12.5px}.whoami span{font-size:10.5px;display:block}
+
+.page{padding:1.5rem;max-width:1560px;width:100%;margin-inline:auto}
+.pagehead{display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1.1rem}
+.pagehead h1{font-size:1.5rem;font-weight:700;letter-spacing:-.02em}
+.pagehead p{font-size:13px;margin-top:.15rem}
+.pagehead .acts{margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap}
+
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem .85rem;border-radius:9px;font-size:13px;font-weight:600;border:1px solid hsl(var(--border));background:hsl(var(--secondary))}
+.btn:hover{border-color:hsl(var(--primary)/.5)}
+.btn--primary{background:hsl(var(--primary));color:#fff;border-color:hsl(var(--primary))}
+.btn--sm{padding:.32rem .6rem;font-size:12px}
+
+/* ---------- filter bar ---------- */
+.filters{
+  display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;
+  padding:.65rem .8rem;border:1px solid hsl(var(--border));border-radius:var(--radius);
+  background:hsl(var(--card));margin-bottom:1.1rem;box-shadow:var(--elevation-1);
+}
+.seg{display:inline-flex;background:hsl(var(--secondary));border-radius:8px;padding:2px;border:1px solid hsl(var(--border))}
+.seg button{padding:.3rem .55rem;border-radius:6px;font-size:12px;font-weight:600;color:hsl(var(--muted-foreground))}
+.seg button.on{background:hsl(var(--card));color:hsl(var(--foreground));box-shadow:var(--elevation-1)}
+select.f,input.f{
+  padding:.42rem .6rem;border-radius:8px;border:1px solid hsl(var(--input));
+  background:hsl(var(--card));color:hsl(var(--foreground));font-size:12.5px;font-weight:500;font-family:inherit;
+}
+.fsep{width:1px;align-self:stretch;background:hsl(var(--border));margin:0 .15rem}
+.fchips{display:flex;gap:.35rem;flex-wrap:wrap}
+.fchip{display:inline-flex;align-items:center;gap:.35rem;font-size:11.5px;font-weight:600;padding:.25rem .5rem;border-radius:999px;background:hsl(var(--primary)/.12);color:hsl(var(--primary));border:1px solid hsl(var(--primary)/.25)}
+.fchip button{font-size:13px;line-height:1;opacity:.7}
+
+/* ---------- cards / grid ---------- */
+.card{background:hsl(var(--card));border:1px solid hsl(var(--border));border-radius:var(--radius);box-shadow:var(--elevation-1)}
+.card>header{padding:.9rem 1.1rem .1rem;display:flex;align-items:flex-start;gap:.75rem;flex-wrap:wrap}
+.card>header h3{font-size:14px;font-weight:700}
+.card>header p{font-size:11.5px;margin-top:.1rem}
+.card>header .r{margin-left:auto;display:flex;gap:.4rem;align-items:center}
+.card .body{padding:1.1rem}
+.grid{display:grid;gap:1rem}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.span2{grid-column:span 2}
+
+/* ---------- stat tiles ---------- */
+.stat{padding:.95rem 1.1rem}
+.stat .lbl{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:hsl(var(--muted-foreground));display:flex;align-items:center;gap:.3rem}
+.stat .val{font-size:1.75rem;font-weight:700;letter-spacing:-.02em;margin:.25rem 0 .1rem;font-variant-numeric:tabular-nums}
+.stat .sub{font-size:11.5px;color:hsl(var(--muted-foreground));font-variant-numeric:tabular-nums}
+.delta{font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:.2rem}
+.up{color:hsl(var(--success))}.down{color:hsl(var(--destructive))}.flat{color:hsl(var(--muted-foreground))}
+.spark{display:block;margin-top:.4rem}
+.info{
+  width:13px;height:13px;border-radius:50%;border:1px solid hsl(var(--muted-foreground));
+  display:inline-grid;place-items:center;font-size:8.5px;font-weight:700;opacity:.65;cursor:help;flex:none;
+}
+
+/* ---------- tables ---------- */
+.tblwrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{
+  text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;
+  color:hsl(var(--muted-foreground));padding:.5rem .7rem;border-bottom:1px solid hsl(var(--border));white-space:nowrap;
+}
+th.n,td.n{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:.6rem .7rem;border-bottom:1px solid hsl(var(--border));vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:hsl(var(--accent)/.5)}
+.rowlink{font-weight:600;color:hsl(var(--primary));cursor:pointer;text-align:left}
+.rowlink:hover{text-decoration:underline}
+.sub2{font-size:11px;color:hsl(var(--muted-foreground))}
+
+.tag{display:inline-flex;align-items:center;gap:.25rem;font-size:11px;font-weight:600;padding:.13rem .45rem;border-radius:6px;background:hsl(var(--secondary));border:1px solid hsl(var(--border));white-space:nowrap}
+.tag.ind{background:hsl(var(--primary)/.12);border-color:hsl(var(--primary)/.3);color:hsl(var(--primary))}
+.pill{display:inline-flex;align-items:center;gap:.3rem;font-size:11px;font-weight:700;padding:.15rem .5rem;border-radius:999px;white-space:nowrap}
+.pill-ok{background:hsl(var(--success)/.15);color:hsl(var(--success))}
+.pill-warn{background:hsl(var(--warning)/.16);color:hsl(var(--warning))}
+.pill-bad{background:hsl(var(--destructive)/.16);color:hsl(var(--destructive))}
+.pill-mut{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+
+/* ---------- bars in tables ---------- */
+.minibar{height:5px;border-radius:3px;background:hsl(var(--muted));overflow:hidden;min-width:56px}
+.minibar i{display:block;height:100%;border-radius:3px}
+
+/* ---------- legend ---------- */
+.legend{display:flex;gap:.9rem;flex-wrap:wrap;font-size:11.5px;font-weight:600;color:hsl(var(--muted-foreground))}
+.legend span{display:inline-flex;align-items:center;gap:.35rem}
+.legend i{width:10px;height:10px;border-radius:3px;display:block}
+
+/* ---------- small multiples ---------- */
+.sm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem}
+.sm-panel{min-width:0}
+.sm-panel figcaption{display:flex;align-items:center;gap:.35rem;font-size:11.5px;font-weight:600;color:hsl(var(--muted-foreground));margin-bottom:.2rem}
+.sm-panel figcaption b{margin-left:auto;font-size:13px;color:hsl(var(--foreground));font-variant-numeric:tabular-nums}
+.sm-dot{width:9px;height:9px;border-radius:3px;flex:none}
+.sm-plot{min-height:118px}
+@media (max-width:1180px){.sm-grid{grid-template-columns:1fr}}
+
+/* ---------- funnel ---------- */
+.funnel{display:flex;flex-direction:column;gap:.45rem}
+.fstep{display:grid;grid-template-columns:132px 1fr 150px;gap:.7rem;align-items:center}
+.fstep .fname{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:.4rem}
+.ftrack{background:hsl(var(--muted)/.55);border-radius:7px;height:30px;overflow:hidden;position:relative}
+.ftrack i{display:block;height:100%;border-radius:7px;position:relative;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.ftrack b{position:absolute;left:.6rem;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);font-variant-numeric:tabular-nums}
+.fmeta{font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums;color:hsl(var(--muted-foreground))}
+.fmeta b{display:block;font-size:12.5px;color:hsl(var(--foreground))}
+
+/* ---------- timeline ---------- */
+.tl{position:relative;padding-left:1.4rem}
+.tl:before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:hsl(var(--border))}
+.tlrow{position:relative;padding:0 0 1rem}
+.tlrow:last-child{padding-bottom:0}
+.tldot{position:absolute;left:-1.4rem;top:3px;width:12px;height:12px;border-radius:50%;border:2px solid hsl(var(--card));box-shadow:0 0 0 1px hsl(var(--border))}
+.tlrow h4{font-size:13px;font-weight:600}
+.tlrow p{font-size:11.5px;color:hsl(var(--muted-foreground));margin-top:.1rem}
+.tlrow time{font-size:11px;color:hsl(var(--muted-foreground));font-variant-numeric:tabular-nums}
+
+/* ---------- misc ---------- */
+.notice{display:flex;gap:.7rem;align-items:flex-start;padding:.8rem 1rem;border-radius:var(--radius);font-size:12.5px;line-height:1.45}
+.notice-warn{background:hsl(var(--warning)/.1);border:1px solid hsl(var(--warning)/.3)}
+.notice-info{background:hsl(var(--primary)/.08);border:1px solid hsl(var(--primary)/.22)}
+.notice b{display:block;font-size:13px;margin-bottom:.1rem}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.35rem .9rem;font-size:12.5px}
+.kv dt{color:hsl(var(--muted-foreground));font-weight:600}
+.kv dd{font-variant-numeric:tabular-nums;text-align:right}
+.sectionlead{font-size:12.5px;color:hsl(var(--muted-foreground));margin-bottom:.8rem;max-width:74ch}
+.hr{height:1px;background:hsl(var(--border));margin:1rem 0}
+.banner{
+  display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;
+  background:hsl(var(--primary)/.1);border:1px solid hsl(var(--primary)/.28);
+  border-radius:var(--radius);padding:.6rem .9rem;font-size:12px;font-weight:600;margin-bottom:1rem;
+}
+.banner .pill{background:hsl(var(--primary));color:#fff}
+
+/* tooltip */
+#tip{
+  position:fixed;pointer-events:none;z-index:99;opacity:0;transition:opacity .12s;
+  background:hsl(var(--card));border:1px solid hsl(var(--border));border-radius:9px;
+  box-shadow:var(--elevation-2);padding:.5rem .65rem;font-size:12px;min-width:132px;
+}
+#tip h5{font-size:11.5px;font-weight:700;margin-bottom:.3rem}
+#tip .tr{display:flex;align-items:center;gap:.4rem;font-variant-numeric:tabular-nums}
+#tip .tr i{width:8px;height:8px;border-radius:2px;flex:none}
+#tip .tr span{margin-left:auto;font-weight:700}
+
+.viewhide{display:none}
+.scrollx{overflow-x:auto}
+
+/* ---------- responsive ---------- */
+@media (max-width:1180px){
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .span2{grid-column:span 2}
+}
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto;flex-direction:row;overflow-x:auto;align-items:center;gap:.2rem;padding:0 .5rem}
+  .brand{border-bottom:none;border-right:1px solid hsl(var(--sidebar-border));padding:.7rem .8rem;flex:none}
+  .brand .txt{display:none}
+  .navgroup{display:flex;align-items:center;padding:0}
+  .navgroup>p{display:none}
+  .navlink{padding:.75rem .7rem;white-space:nowrap;border-left:none;border-bottom:2px solid transparent}
+  .navlink.on{border-left:none;border-bottom-color:hsl(var(--sidebar-primary));background:transparent}
+  .sidefoot{display:none}
+  .g2,.g3{grid-template-columns:1fr}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .span2{grid-column:span 1}
+  .page{padding:1rem}
+  .fstep{grid-template-columns:110px 1fr}
+  .fstep .fmeta{grid-column:1/-1;text-align:left;display:flex;gap:.6rem}
+  .fstep .fmeta b{display:inline}
+}
+@media (max-width:640px){
+  .g4{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .page{padding:.85rem}
+  .pagehead h1{font-size:1.25rem}
+  .stat .val{font-size:1.5rem}
+  .topbar{padding:.6rem .85rem}
+  .whoami{display:none}
+  .filters{padding:.55rem}
+}
+@media (max-width:400px){
+  .fstep{grid-template-columns:92px 1fr}
+  .seg button{padding:.3rem .42rem;font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="tip" role="tooltip"></div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div class="txt"><b>PromptLine</b><span>Marketing</span></div>
+    </div>
+    <nav class="navgroup">
+      <p>Overview</p>
+      <button class="navlink on" data-view="dashboard"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>Dashboard</button>
+      <button class="navlink" data-view="attribution"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v4H3zM6 10h12v4H6zM9 17h6v4H9z"/></svg>Attribution</button>
+    </nav>
+    <nav class="navgroup">
+      <p>Campaigns</p>
+      <button class="navlink" data-view="campaigns"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>Campaigns</button>
+      <button class="navlink" data-view="sequences"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/><path d="M6.5 10v4a3 3 0 003 3h4.5"/></svg>Sequences</button>
+      <button class="navlink" data-view="templates"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 9v11"/></svg>Templates</button>
+    </nav>
+    <nav class="navgroup">
+      <p>Audience</p>
+      <button class="navlink" data-view="contacts"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/></svg>Contacts</button>
+      <button class="navlink" data-view="segments"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Tags &amp; Segments</button>
+    </nav>
+    <nav class="navgroup">
+      <p>Settings</p>
+      <button class="navlink" data-view="deliverability"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Deliverability<span class="navbadge" id="delivBadge">2</span></button>
+      <button class="navlink" data-view="senders"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>Senders</button>
+    </nav>
+    <div class="sidefoot">Proposed v2 · prototype<br>Illustrative sample data</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <span class="chip">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+        Marketing
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>
+      </span>
+      <span class="grow"></span>
+      <button class="btn btn--sm" id="themeBtn" title="Toggle light / dark">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <div class="avatar">G</div>
+      <div class="whoami"><b>Gauresh</b><span class="muted">Super Admin</span></div>
+    </header>
+
+    <div class="page" id="page"></div>
+  </div>
+</div>
+<script>
+/* ===========================================================================
+   PromptLine Marketing — Proposed v2 prototype
+   All figures below are ILLUSTRATIVE SAMPLE DATA, not live PromptLine numbers.
+   Internally consistent so every rate on screen reconciles to the raw counts.
+   =========================================================================== */
+(function () {
+"use strict";
+
+/* ----------------------------- data ------------------------------------- */
+
+var CAMPAIGNS = [
+  { id:"c1", name:"HVAC — Missed-Call Recovery", industry:"HVAC", type:"Sequence", status:"Sending",
+    sent:2140, delivered:2098, bounced:42, opens:921, clicks:187, leads:41, demos:12, customers:2, unsub:12, spam:2,
+    sender:"Ranjit", start:"28 Aug" },
+  { id:"c2", name:"Plumbing — After-Hours Answering", industry:"Plumbing", type:"Sequence", status:"Sending",
+    sent:1880, delivered:1842, bounced:38, opens:764, clicks:152, leads:33, demos:9, customers:1, unsub:9, spam:1,
+    sender:"Ranjit", start:"31 Aug" },
+  { id:"c3", name:"Dental — Patient Intake", industry:"Dental", type:"Broadcast", status:"Sent",
+    sent:1460, delivered:1402, bounced:58, opens:612, clicks:96, leads:18, demos:4, customers:0, unsub:14, spam:3,
+    sender:"Prashant", start:"4 Sep" },
+  { id:"c4", name:"Landscaping — Estimate Follow-up", industry:"Landscaping", type:"Sequence", status:"Sending",
+    sent:1320, delivered:1299, bounced:21, opens:508, clicks:88, leads:19, demos:6, customers:1, unsub:6, spam:0,
+    sender:"Ranjit", start:"6 Sep" },
+  { id:"c5", name:"Home Care — Bilingual Intake (ES)", industry:"Home Care", type:"Sequence", status:"Sending",
+    sent:980, delivered:967, bounced:13, opens:486, clicks:121, leads:28, demos:8, customers:2, unsub:3, spam:0,
+    sender:"Shantanu", start:"9 Sep" },
+  { id:"c6", name:"ROI Calculator Follow-up (evergreen)", industry:"All", type:"Automation", status:"Live",
+    sent:1632, delivered:1624, bounced:8, opens:503, clicks:68, leads:9, demos:2, customers:0, unsub:14, spam:3,
+    sender:"Ranjit", start:"Always on" }
+];
+
+function totals() {
+  var t = { sent:0, delivered:0, bounced:0, opens:0, clicks:0, leads:0, demos:0, customers:0, unsub:0, spam:0 };
+  CAMPAIGNS.forEach(function (c) { for (var k in t) t[k] += c[k]; });
+  return t;
+}
+var T = totals();
+
+var LINKS = [
+  { url:"promptline.app/roi-calculator",       label:"ROI calculator",        clicks:241, unique:214, leads:96 },
+  { url:"promptline.app/book-a-demo",          label:"Book a demo",           clicks:168, unique:151, leads:41 },
+  { url:"promptline.app/industries/hvac",      label:"HVAC industry page",    clicks: 94, unique: 86, leads:7  },
+  { url:"promptline.app/es/recepcionista",     label:"Spanish landing page",  clicks: 77, unique: 71, leads:4  },
+  { url:"promptline.app/pricing",              label:"Pricing",               clicks: 52, unique: 48, leads:0  },
+  { url:"promptline.app (logo)",               label:"Header logo",           clicks: 31, unique: 29, leads:0  },
+  { url:"unsubscribe",                         label:"Unsubscribe",           clicks: 58, unique: 58, leads:0  }
+];
+
+var INDUSTRIES = [
+  { name:"HVAC",        contacts:612, clickRate:8.91, leadRate:1.95 },
+  { name:"Plumbing",    contacts:548, clickRate:8.25, leadRate:1.79 },
+  { name:"Home Care",   contacts:301, clickRate:12.51, leadRate:2.90 },
+  { name:"Landscaping", contacts:436, clickRate:6.77, leadRate:1.46 },
+  { name:"Dental",      contacts:494, clickRate:6.85, leadRate:1.28 },
+  { name:"Property",    contacts:268, clickRate:5.12, leadRate:0.75 },
+  { name:"Other",       contacts:188, clickRate:4.40, leadRate:0.53 }
+];
+
+/* deterministic 28-day series so the prototype never shifts between loads */
+function series(n, base, amp, seed) {
+  var out = [], s = seed;
+  for (var i = 0; i < n; i++) {
+    s = (s * 1103515245 + 12345) % 2147483648;
+    var r = s / 2147483648;
+    out.push(+(base + Math.sin(i / 3.1) * amp * 0.55 + (r - 0.5) * amp).toFixed(2));
+  }
+  return out;
+}
+var DAYS = 28;
+var SERIES = {
+  open:  series(DAYS, 41.1, 7.5, 7),
+  click: series(DAYS, 7.71, 2.6, 19),
+  unsub: series(DAYS, 0.63, 0.34, 43)
+};
+var VOLUME = series(DAYS, 336, 190, 61).map(function (v) { return Math.max(0, Math.round(v)); });
+
+var CONTACTS = [
+  { id:"p1", name:"Marcus Webb", email:"marcus@webbheating.com", company:"Webb Heating & Air", industry:"HVAC",
+    tags:["industry:hvac","source:calculator","stage:demo-booked","value:high"], eng:"Hot", src:"Calculator lead",
+    added:"2 Sep", last:"18 Sep", opens:9, clicks:4, loss:4200 },
+  { id:"p2", name:"Elena Ruiz", email:"elena@casacarehome.com", company:"Casa Care Home Services", industry:"Home Care",
+    tags:["industry:home-care","lang:es","source:calculator","stage:demo-booked"], eng:"Hot", src:"Calculator lead",
+    added:"9 Sep", last:"19 Sep", opens:7, clicks:5, loss:3100 },
+  { id:"p3", name:"Dev Patel", email:"dev@patelplumbingco.com", company:"Patel Plumbing Co", industry:"Plumbing",
+    tags:["industry:plumbing","source:contact-form"], eng:"Warm", src:"Contact request",
+    added:"31 Aug", last:"16 Sep", opens:5, clicks:2, loss:2650 },
+  { id:"p4", name:"Sarah Lindqvist", email:"sarah@brightsmiledental.com", company:"Bright Smile Dental", industry:"Dental",
+    tags:["industry:dental","source:csv"], eng:"Warm", src:"CSV import",
+    added:"4 Sep", last:"12 Sep", opens:3, clicks:1, loss:1800 },
+  { id:"p5", name:"Tom Brannigan", email:"tom@brannigangrounds.com", company:"Brannigan Grounds", industry:"Landscaping",
+    tags:["industry:landscaping","source:calculator","value:high"], eng:"Warm", src:"Calculator lead",
+    added:"6 Sep", last:"17 Sep", opens:4, clicks:2, loss:5400 },
+  { id:"p6", name:"Priya Raman", email:"priya@ramanpropertygroup.com", company:"Raman Property Group", industry:"Property",
+    tags:["industry:property","source:contact-form"], eng:"Cold", src:"Contact request",
+    added:"14 Aug", last:"22 Aug", opens:1, clicks:0, loss:0 },
+  { id:"p7", name:"Carlos Mendez", email:"carlos@mendezhvac.com", company:"Mendez HVAC", industry:"HVAC",
+    tags:["industry:hvac","lang:es","source:calculator"], eng:"Hot", src:"Calculator lead",
+    added:"11 Sep", last:"19 Sep", opens:6, clicks:3, loss:3850 },
+  { id:"p8", name:"Janine Oyelaran", email:"janine@oyelarandental.com", company:"Oyelaran Family Dental", industry:"Dental",
+    tags:["industry:dental","source:csv","suppressed:bounced"], eng:"Suppressed", src:"CSV import",
+    added:"4 Sep", last:"4 Sep", opens:0, clicks:0, loss:0 },
+  { id:"p9", name:"Rhett Callaway", email:"rhett@callawayplumbing.com", company:"Callaway Plumbing", industry:"Plumbing",
+    tags:["industry:plumbing","source:calculator","stage:customer"], eng:"Customer", src:"Calculator lead",
+    added:"19 Aug", last:"20 Sep", opens:11, clicks:6, loss:2900 },
+  { id:"p10", name:"Aiko Tanaka", email:"aiko@tanakalawn.com", company:"Tanaka Lawn & Garden", industry:"Landscaping",
+    tags:["industry:landscaping","source:contact-form"], eng:"Cold", src:"Contact request",
+    added:"21 Aug", last:"26 Aug", opens:2, clicks:0, loss:1450 },
+  { id:"p11", name:"Bilal Haddad", email:"bilal@haddadhomecare.com", company:"Haddad Home Care", industry:"Home Care",
+    tags:["industry:home-care","lang:es","source:calculator","value:high"], eng:"Hot", src:"Calculator lead",
+    added:"12 Sep", last:"20 Sep", opens:8, clicks:4, loss:6200 },
+  { id:"p12", name:"Grace Okoye", email:"grace@okoyeheating.com", company:"Okoye Heating Services", industry:"HVAC",
+    tags:["industry:hvac","source:csv"], eng:"Warm", src:"CSV import",
+    added:"28 Aug", last:"15 Sep", opens:4, clicks:1, loss:2100 }
+];
+
+var TAGS = [
+  { name:"industry:hvac",        n:612, auto:true,  rule:"Calculator lead where industry = HVAC" },
+  { name:"industry:plumbing",    n:548, auto:true,  rule:"Calculator lead where industry = Plumbing" },
+  { name:"industry:dental",      n:494, auto:true,  rule:"Calculator lead where industry = Dental" },
+  { name:"industry:landscaping", n:436, auto:true,  rule:"Calculator lead where industry = Landscaping" },
+  { name:"industry:home-care",   n:301, auto:true,  rule:"Calculator lead where industry = Home Care" },
+  { name:"industry:property",    n:268, auto:true,  rule:"Calculator lead where industry = Property" },
+  { name:"lang:es",              n:214, auto:true,  rule:"Clicked a /es/ link, or opted in via Spanish form" },
+  { name:"value:high",           n:186, auto:true,  rule:"Calculator monthly_loss > $3,000" },
+  { name:"stage:demo-booked",    n: 41, auto:true,  rule:"Clicked promptline.app/book-a-demo" },
+  { name:"stage:customer",       n:  6, auto:true,  rule:"Email matches a tenant record in the product DB" },
+  { name:"engagement:cold",      n:397, auto:true,  rule:"No open or click in 60 days" },
+  { name:"suppressed:bounced",   n: 74, auto:true,  rule:"Hard bounce received" },
+  { name:"source:calculator",    n:721, auto:true,  rule:"Synced from calculator_leads" },
+  { name:"source:contact-form",  n:392, auto:true,  rule:"Synced from contact_submissions" },
+  { name:"source:csv",           n:734, auto:false, rule:"Set at import time" },
+  { name:"partner:referral",     n: 18, auto:false, rule:"Added by hand" }
+];
+
+var RULES = [
+  { on:"Calculator lead created",   cond:"industry is set",              then:["Add tag industry:{industry}","Add tag source:calculator","Enrol in the matching industry sequence"], runs:721, on7:38 },
+  { on:"Link clicked",              cond:"URL contains /book-a-demo",    then:["Add tag stage:demo-booked","Remove tag engagement:cold","Alert the sender in Slack"], runs:41, on7:9 },
+  { on:"Calculator lead created",   cond:"monthly_loss > $3,000",        then:["Add tag value:high","Assign owner: Shantanu"], runs:186, on7:11 },
+  { on:"No open or click in 60 days", cond:"status is active",           then:["Add tag engagement:cold","Remove from the Active Prospects segment"], runs:397, on7:24 },
+  { on:"Hard bounce",               cond:"—",                            then:["Add tag suppressed:bounced","Set status to unsubscribed","Never send again"], runs:74, on7:5 },
+  { on:"Tenant created in product", cond:"email matches a contact",      then:["Add tag stage:customer","Stop every sequence","Move to the Customer Onboarding list"], runs:6, on7:1 }
+];
+
+var SEQUENCES = [
+  { name:"HVAC — Missed-Call Recovery", steps:5, active:312, done:198, clickRate:8.91, leadRate:1.95, lang:"EN" },
+  { name:"Plumbing — After-Hours Answering", steps:5, active:276, done:171, clickRate:8.25, leadRate:1.79, lang:"EN" },
+  { name:"Home Care — Bilingual Intake", steps:4, active:188, done:96,  clickRate:12.51, leadRate:2.90, lang:"ES / EN" },
+  { name:"Landscaping — Estimate Follow-up", steps:4, active:203, done:142, clickRate:6.77, leadRate:1.46, lang:"EN" },
+  { name:"Calculator Follow-up (evergreen)", steps:3, active:441, done:664, clickRate:4.19, leadRate:0.55, lang:"EN" }
+];
+
+var TIMELINE = [
+  { t:"2 Sep · 09:14", k:"contact",  h:"Contact created", p:"Submitted the ROI calculator — missed 14 calls/week, avg job $380" },
+  { t:"2 Sep · 09:14", k:"tag",      h:"Tag added: industry:hvac", p:"Automation: Industry router" },
+  { t:"2 Sep · 09:14", k:"tag",      h:"Tag added: value:high", p:"Automation: monthly_loss $4,200 > $3,000" },
+  { t:"2 Sep · 09:15", k:"seq",      h:"Enrolled in HVAC — Missed-Call Recovery", p:"Automation: Industry router · step 1 of 5" },
+  { t:"2 Sep · 09:16", k:"send",     h:"Delivered: Your AI Receptionist ROI Report", p:"From ranjit@promptline.app · Resend id re_8Kz…4Qa" },
+  { t:"2 Sep · 11:42", k:"open",     h:"Opened", p:"First of 4 opens · Gmail · macOS" },
+  { t:"2 Sep · 11:43", k:"click",    h:"Clicked promptline.app/roi-calculator", p:"utm_campaign=hvac-missed-call · position: hero button" },
+  { t:"2 Sep · 11:43", k:"tag",      h:"Tag added: engagement:hot", p:"Automation: clicked within 24h of delivery" },
+  { t:"5 Sep · 09:00", k:"send",     h:"Delivered: What 14 missed calls a week actually costs", p:"Sequence step 2 of 5" },
+  { t:"5 Sep · 19:22", k:"open",     h:"Opened", p:"iOS Mail — open may be machine-generated (Apple MPP)" },
+  { t:"8 Sep · 09:00", k:"send",     h:"Delivered: A 15-minute demo, and you keep the recording", p:"Sequence step 3 of 5" },
+  { t:"8 Sep · 14:07", k:"click",    h:"Clicked promptline.app/book-a-demo", p:"utm_campaign=hvac-missed-call · position: closing CTA" },
+  { t:"8 Sep · 14:07", k:"tag",      h:"Tag added: stage:demo-booked", p:"Automation: demo-link router" },
+  { t:"8 Sep · 14:07", k:"tag",      h:"Tag removed: engagement:cold", p:"Automation: demo-link router" },
+  { t:"8 Sep · 14:08", k:"seq",      h:"Removed from HVAC — Missed-Call Recovery", p:"Goal met: demo booked — steps 4 and 5 suppressed" },
+  { t:"9 Sep · 10:30", k:"lead",     h:"Demo booked for 11 Sep, 9:30am EDT", p:"Attributed to HVAC — Missed-Call Recovery, step 3" },
+  { t:"11 Sep · 10:05", k:"note",    h:"Note added by Ranjit", p:"Runs 6 trucks. Wants Spanish for the dispatch line. Asked about ServiceTitan." }
+];
+
+var SUPPRESSIONS = [
+  { reason:"Hard bounce", n:74,  note:"Address does not exist — permanent" },
+  { reason:"Unsubscribed", n:58, note:"One-click or footer link" },
+  { reason:"Spam complaint", n:9, note:"Marked as spam at the mailbox provider" },
+  { reason:"Manual block", n:4,  note:"Added by an admin" }
+];
+
+/* ----------------------------- helpers ---------------------------------- */
+
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var page = $("#page"), tip = $("#tip");
+function n(v)  { return v.toLocaleString("en-US"); }
+function pc(v, d) { return v.toFixed(d === undefined ? 1 : d) + "%"; }
+function rate(a, b) { return b ? (a / b) * 100 : 0; }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]; }); }
+function cssv(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+/* Pick readable ink for a label sitting on a coloured fill. The funnel ramp
+   runs light-to-dark in one theme and dark-to-light in the other, so a fixed
+   white label is unreadable on half the steps. Measure, don't guess. */
+function inkOn(hex) {
+  var h = hex.replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var c = [0, 2, 4].map(function (i) {
+    var v = parseInt(h.substr(i, 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  var L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  return L > 0.42 ? "#0f172a" : "#ffffff";
+}
+
+function showTip(html, x, y) {
+  tip.innerHTML = html; tip.style.opacity = 1;
+  var r = tip.getBoundingClientRect();
+  var left = Math.min(x + 14, window.innerWidth - r.width - 10);
+  var top = Math.min(Math.max(8, y - r.height - 12), window.innerHeight - r.height - 8);
+  tip.style.left = left + "px"; tip.style.top = top + "px";
+}
+function hideTip() { tip.style.opacity = 0; }
+
+/* -- sparkline: one series, so no legend (the tile title names it) -------- */
+function sparkline(vals, color, w, h) {
+  w = w || 132; h = h || 26;
+  var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals), rg = (mx - mn) || 1;
+  var pts = vals.map(function (v, i) {
+    return (i / (vals.length - 1) * w).toFixed(1) + "," + (h - 2 - (v - mn) / rg * (h - 4)).toFixed(1);
+  }).join(" ");
+  return '<svg class="spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h +
+    '" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="' + color +
+    '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+/* -- small multiples: one panel per measure, each with its own scale.
+      Open rate (~41%), click rate (~8%) and unsubscribe rate (~0.6%) share a
+      unit but not a magnitude — on one axis the unsubscribe line flattens onto
+      the baseline and stops carrying information. Separate panels keep every
+      series readable and still let the reader compare shapes.                */
+function smallMultiples(el, cfg) {
+  el.innerHTML = '<div class="sm-grid">' + cfg.panels.map(function (p, i) {
+    return '<figure class="sm-panel">' +
+      '<figcaption><span class="sm-dot" style="background:' + p.color + '"></span>' + esc(p.name) +
+      '<b>' + p.values[p.values.length - 1].toFixed(2) + '%</b></figcaption>' +
+      '<div class="sm-plot" data-p="' + i + '"></div></figure>';
+  }).join("") + '</div>';
+  cfg.panels.forEach(function (p, i) {
+    lineChart(el.querySelector('[data-p="' + i + '"]'), {
+      height:118, compact:true, aria:p.name + " over the last 28 days",
+      labels:cfg.labels, series:[{ name:p.name, values:p.values, color:p.color }]
+    });
+  });
+}
+
+/* -- line chart, crosshair + tooltip ------------------------------------- */
+function lineChart(el, cfg) {
+  var W = el.clientWidth || 640, H = cfg.height || 240;
+  var m = cfg.compact ? { t: 10, r: 10, b: 20, l: 34 } : { t: 14, r: 16, b: 26, l: 40 };
+  var iw = W - m.l - m.r, ih = H - m.t - m.b;
+  var all = cfg.series.reduce(function (a, s) { return a.concat(s.values); }, []);
+  var mx = Math.max.apply(null, all) * 1.15, mn = 0;
+  var dp = mx < 3 ? 1 : 0;
+  var X = function (i) { return m.l + i / (cfg.labels.length - 1) * iw; };
+  var Y = function (v) { return m.t + ih - (v - mn) / (mx - mn) * ih; };
+
+  var s = '<svg width="100%" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria) + '">';
+  var ticks = cfg.compact ? 2 : 4;
+  for (var g = 0; g <= ticks; g++) {
+    var v = mn + (mx - mn) * g / ticks, y = Y(v);
+    s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) +
+         '" stroke="' + cssv("--grid") + '" stroke-width="1"/>';
+    s += '<text x="' + (m.l - 6) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end" font-size="9.5" fill="' +
+         cssv("--axis") + '" font-family="Montserrat,sans-serif">' + v.toFixed(dp) + '%</text>';
+  }
+  var every = Math.ceil(cfg.labels.length / (cfg.compact ? 3 : 7));
+  cfg.labels.forEach(function (lab, i) {
+    if (i % every !== 0 && i !== cfg.labels.length - 1) return;
+    if (cfg.compact && i !== 0 && i !== cfg.labels.length - 1) return;
+    s += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' +
+         (cfg.compact ? (i === 0 ? "start" : "end") : "middle") + '" font-size="9.5" fill="' +
+         cssv("--axis") + '" font-family="Montserrat,sans-serif">' + esc(lab) + '</text>';
+  });
+  cfg.series.forEach(function (ser) {
+    var d = ser.values.map(function (v, i) { return (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }).join(" ");
+    s += '<path d="' + d + '" fill="none" stroke="' + ser.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    // direct label on the final point — identity never rests on colour alone
+    var lx = X(ser.values.length - 1), ly = Y(ser.values[ser.values.length - 1]);
+    s += '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="3.5" fill="' + ser.color +
+         '" stroke="' + cssv("--surface-chart") + '" stroke-width="2"/>';
+  });
+  s += '<line id="cx" x1="0" x2="0" y1="' + m.t + '" y2="' + (m.t + ih) + '" stroke="' + cssv("--axis") +
+       '" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>';
+  s += '<rect x="' + m.l + '" y="' + m.t + '" width="' + iw + '" height="' + ih + '" fill="transparent" id="hit"/></svg>';
+  el.innerHTML = s;
+
+  var svg = el.querySelector("svg"), cx = el.querySelector("#cx"), hit = el.querySelector("#hit");
+  function move(ev) {
+    var r = svg.getBoundingClientRect();
+    var px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    var sx = px / r.width * W;
+    var i = Math.round((sx - m.l) / iw * (cfg.labels.length - 1));
+    i = Math.max(0, Math.min(cfg.labels.length - 1, i));
+    cx.setAttribute("x1", X(i)); cx.setAttribute("x2", X(i)); cx.setAttribute("opacity", "1");
+    var h = "<h5>" + esc(cfg.labels[i]) + "</h5>";
+    cfg.series.forEach(function (ser) {
+      h += '<div class="tr"><i style="background:' + ser.color + '"></i>' + esc(ser.name) +
+           "<span>" + ser.values[i].toFixed(2) + "%</span></div>";
+    });
+    showTip(h, ev.touches ? ev.touches[0].clientX : ev.clientX, r.top + m.t + 40);
+  }
+  hit.addEventListener("mousemove", move);
+  hit.addEventListener("touchmove", move, { passive:true });
+  hit.addEventListener("mouseleave", function () { cx.setAttribute("opacity", "0"); hideTip(); });
+}
+
+/* -- horizontal magnitude bars: one hue, light to dark -------------------- */
+function hbars(rows, opts) {
+  var mx = Math.max.apply(null, rows.map(function (r) { return r.v; }));
+  var ramp = ["--seq7","--seq6","--seq5","--seq4","--seq3","--seq2","--seq1"];
+  return '<div style="display:flex;flex-direction:column;gap:.55rem">' + rows.map(function (r, i) {
+    var col = cssv(ramp[Math.min(i, ramp.length - 1)]);
+    return '<div style="display:grid;grid-template-columns:1fr auto;gap:.3rem .7rem;align-items:center">' +
+      '<div style="font-size:12.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.label) + '</div>' +
+      '<div class="tnum" style="font-size:12.5px;font-weight:700">' + esc(r.right) + '</div>' +
+      '<div style="grid-column:1/-1;height:9px;border-radius:5px;background:hsl(var(--muted)/.6);overflow:hidden">' +
+        '<i style="display:block;height:100%;border-radius:5px;background:' + col + ';width:' + (r.v / mx * 100).toFixed(1) + '%"></i>' +
+      '</div>' +
+      (r.sub ? '<div class="sub2" style="grid-column:1/-1;margin-top:-.15rem">' + esc(r.sub) + '</div>' : "") +
+      '</div>';
+  }).join("") + '</div>' + (opts && opts.note ? '<p class="sub2" style="margin-top:.7rem">' + esc(opts.note) + '</p>' : "");
+}
+
+function statTile(o) {
+  return '<div class="card stat">' +
+    '<div class="lbl">' + esc(o.label) + (o.info ? '<span class="info" title="' + esc(o.info) + '">i</span>' : "") + '</div>' +
+    '<div class="val">' + o.value + '</div>' +
+    '<div class="sub">' + (o.delta !== undefined
+      ? '<span class="delta ' + (o.delta > 0 ? "up" : o.delta < 0 ? "down" : "flat") + '">' +
+        (o.delta > 0 ? "▲" : o.delta < 0 ? "▼" : "■") + " " + Math.abs(o.delta).toFixed(1) + (o.deltaUnit || "pp") + '</span> ' : "") +
+      esc(o.sub || "") + '</div>' +
+    (o.spark ? sparkline(o.spark, o.sparkColor || cssv("--c1")) : "") +
+    '</div>';
+}
+
+function engPill(e) {
+  var m = { Hot:"pill-ok", Warm:"pill-warn", Cold:"pill-mut", Suppressed:"pill-bad", Customer:"pill-ok" };
+  return '<span class="pill ' + m[e] + '">' + esc(e) + '</span>';
+}
+
+/* ----------------------------- filter bar ------------------------------- */
+var STATE = { range:"28d", industry:"all", eng:"all", source:"all", tag:"all", q:"" };
+
+function filterBar(opts) {
+  opts = opts || {};
+  var ranges = [["7d","7d"],["28d","28d"],["3m","3m"],["12m","12m"],["mtd","MTD"],["custom","Custom"]];
+  var h = '<div class="filters">' +
+    '<div class="seg" id="rangeSeg">' + ranges.map(function (r) {
+      return '<button data-r="' + r[0] + '" class="' + (STATE.range === r[0] ? "on" : "") + '">' + r[1] + '</button>';
+    }).join("") + '</div>' +
+    '<span class="muted" style="font-size:11.5px">' + (STATE.range === "custom" ? "1 Aug – 20 Sep 2026" : "24 Aug – 20 Sep 2026") + '</span>' +
+    '<label class="chip" style="font-weight:500;cursor:pointer"><input type="checkbox" checked style="margin-right:.35rem">Compare to previous</label>' +
+    '<span class="fsep"></span>';
+
+  if (opts.industry !== false) {
+    h += '<select class="f" id="fInd"><option value="all">All industries</option>' +
+      INDUSTRIES.map(function (i) { return '<option' + (STATE.industry === i.name ? " selected" : "") + '>' + i.name + '</option>'; }).join("") +
+      '</select>';
+  }
+  if (opts.eng) {
+    h += '<select class="f" id="fEng"><option value="all">Any engagement</option><option>Hot</option><option>Warm</option><option>Cold</option><option>Customer</option><option>Suppressed</option></select>';
+  }
+  if (opts.source) {
+    h += '<select class="f" id="fSrc"><option value="all">All sources</option><option>Calculator lead</option><option>Contact request</option><option>CSV import</option><option>Manual</option></select>';
+  }
+  if (opts.tag) {
+    h += '<select class="f" id="fTag"><option value="all">Any tag</option>' +
+      TAGS.map(function (t) { return "<option>" + esc(t.name) + "</option>"; }).join("") + '</select>';
+  }
+  if (opts.search) h += '<input class="f" id="fQ" placeholder="Search name, email, company…" style="min-width:210px;flex:1">';
+  h += '<span class="grow" style="flex:1"></span><button class="btn btn--sm" id="saveView">Save this view</button>' +
+       '<button class="btn btn--sm">Export CSV</button></div>';
+
+  if (opts.chips !== false) {
+    var chips = [];
+    if (STATE.industry !== "all") chips.push("Industry: " + STATE.industry);
+    if (STATE.eng !== "all") chips.push("Engagement: " + STATE.eng);
+    if (chips.length) {
+      h += '<div class="fchips" style="margin:-.6rem 0 1rem">' + chips.map(function (c) {
+        return '<span class="fchip">' + esc(c) + '<button data-clear="' + esc(c) + '">&times;</button></span>';
+      }).join("") + '</div>';
+    }
+  }
+  return h;
+}
+
+/* ----------------------------- views ------------------------------------ */
+var VIEWS = {};
+
+VIEWS.dashboard = function () {
+  var labels = [];
+  for (var i = DAYS - 1; i >= 0; i--) {
+    var d = new Date(2026, 8, 20); d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString("en-AU", { day:"numeric", month:"short" }));
+  }
+  var funnel = [
+    { name:"Sent",            v:T.sent,      note:"Accepted by the provider" },
+    { name:"Delivered",       v:T.delivered, note:"Mail server accepted it" },
+    { name:"Opened",          v:T.opens,     note:"Unique — treat as directional" },
+    { name:"Clicked",         v:T.clicks,    note:"Unique — the reliable signal" },
+    { name:"Lead captured",   v:T.leads,     note:"Calculator or contact form" },
+    { name:"Demo booked",     v:T.demos,     note:"Calendar event created" },
+    { name:"Became customer", v:T.customers, note:"Tenant created and paying" }
+  ];
+  var ramp = ["--seq1","--seq2","--seq3","--seq4","--seq5","--seq6","--seq7"];
+
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Marketing Dashboard</h1>' +
+      '<p class="muted">Every campaign, every send, every click — and what it turned into.</p></div>' +
+      '<div class="acts"><button class="btn">Schedule report</button><button class="btn btn--primary">New campaign</button></div></div>' +
+    '<div class="banner"><span class="pill">Prototype</span> Proposed v2 for PromptLine. Every number on this screen is illustrative sample data.</div>' +
+    filterBar({ industry:true }) +
+
+    '<div class="grid g4" style="margin-bottom:1rem">' +
+      statTile({ label:"Emails delivered", value:n(T.delivered), delta:+6.2, deltaUnit:"%",
+                 sub:"of " + n(T.sent) + " sent · " + pc(rate(T.delivered, T.sent), 1) + " delivery rate",
+                 spark:VOLUME, sparkColor:cssv("--c1"),
+                 info:"delivered ÷ sent. Anything under 97% means list quality, not copy." }) +
+      statTile({ label:"Unique open rate", value:pc(rate(T.opens, T.delivered)), delta:-1.4,
+                 sub:n(T.opens) + " of " + n(T.delivered) + " delivered",
+                 spark:SERIES.open, sparkColor:cssv("--c2"),
+                 info:"Directional only. Apple Mail Privacy Protection pre-loads tracking pixels, so a share of these opens are machines, not people. Judge campaigns on clicks." }) +
+      statTile({ label:"Unique click rate", value:pc(rate(T.clicks, T.delivered), 2), delta:+0.8,
+                 sub:n(T.clicks) + " clicks · " + pc(rate(T.clicks, T.opens), 1) + " click-to-open",
+                 spark:SERIES.click, sparkColor:cssv("--c3"),
+                 info:"unique_clicked ÷ delivered. This is the metric to optimise — it survives privacy proxies." }) +
+      statTile({ label:"Leads from email", value:n(T.leads), delta:+18.0, deltaUnit:"%",
+                 sub:n(T.demos) + " demos · " + n(T.customers) + " new customers · $" + n(T.customers * 99) + " new MRR",
+                 spark:series(DAYS, 5.3, 4, 91), sparkColor:cssv("--c4"),
+                 info:"A lead is a calculator completion or contact-form submission attributed to a campaign click within 30 days." }) +
+    '</div>' +
+
+    '<div class="grid g2" style="margin-bottom:1rem">' +
+      '<div class="card"><header><div><h3>Engagement over time</h3>' +
+        '<p class="muted">Last 28 days. One panel per measure — on a shared axis the unsubscribe line would sit flat on the baseline and tell you nothing.</p></div></header>' +
+        '<div class="body"><div id="lineHost"></div>' +
+        '<p class="sub2" style="margin-top:.7rem">Hover any panel for the exact figure on that day. Send volume is a count, not a percentage, so it is charted separately rather than forced onto this axis.</p>' +
+        '</div></div>' +
+
+      '<div class="card"><header><div><h3>Email to revenue</h3>' +
+        '<p class="muted">The whole funnel, because the product database is in the same place as the marketing data.</p></div></header>' +
+        '<div class="body"><div class="funnel">' +
+        funnel.map(function (f, i) {
+          var prev = i ? funnel[i - 1].v : f.v;
+          var w = Math.max(1.6, f.v / funnel[0].v * 100);
+          var fill = cssv(ramp[i]);
+          var outside = w < 18;
+          var lbl = outside
+            ? "left:auto;right:auto;margin-left:calc(" + w.toFixed(2) + "% + .5rem);color:hsl(var(--foreground));text-shadow:none"
+            : "color:" + inkOn(fill) + ";text-shadow:none";
+          return '<div class="fstep"><div class="fname">' + esc(f.name) + '</div>' +
+            '<div class="ftrack"><i style="width:' + w.toFixed(2) + '%;background:' + fill + '"></i>' +
+            '<b style="' + lbl + '">' + n(f.v) + '</b></div>' +
+            '<div class="fmeta"><b>' + (i ? pc(rate(f.v, prev), 1) : "100%") + '</b>' + esc(f.note) + '</div></div>';
+        }).join("") +
+        '</div></div></div>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:1rem"><header><div><h3>Campaign performance</h3>' +
+      '<p class="muted">Sorted by leads produced, not by opens. Click a campaign for its per-link breakdown.</p></div>' +
+      '<div class="r"><select class="f"><option>Sort: Leads</option><option>Sort: Click rate</option><option>Sort: Delivered</option><option>Sort: Newest</option></select></div></header>' +
+      '<div class="tblwrap"><table><thead><tr>' +
+        '<th>Campaign</th><th>Industry</th><th>Type</th><th class="n">Delivered</th><th class="n">Open rate</th>' +
+        '<th class="n">Click rate</th><th class="n">Leads</th><th class="n">Cust.</th><th class="n">Bounce</th><th class="n">Unsub</th><th>Health</th>' +
+      '</tr></thead><tbody>' +
+      CAMPAIGNS.slice().sort(function (a, b) { return b.leads - a.leads; }).map(function (c) {
+        var br = rate(c.bounced, c.sent), cr = rate(c.clicks, c.delivered), sr = rate(c.spam, c.delivered);
+        var health = br > 3 ? ['pill-bad','List quality'] : sr > 0.1 ? ['pill-warn','Complaints'] : ['pill-ok','Healthy'];
+        return '<tr><td><button class="rowlink" data-camp="' + c.id + '">' + esc(c.name) + '</button>' +
+          '<div class="sub2">' + esc(c.sender) + " · from " + esc(c.start) + '</div></td>' +
+          '<td><span class="tag ind">' + esc(c.industry) + '</span></td>' +
+          '<td class="sub2">' + esc(c.type) + '</td>' +
+          '<td class="n">' + n(c.delivered) + '</td>' +
+          '<td class="n">' + pc(rate(c.opens, c.delivered)) + '</td>' +
+          '<td class="n"><div style="display:flex;align-items:center;gap:.45rem;justify-content:flex-end">' +
+            '<span>' + pc(cr, 2) + '</span><span class="minibar"><i style="width:' + Math.min(100, cr / 13 * 100).toFixed(0) + '%;background:' + cssv("--c3") + '"></i></span></div></td>' +
+          '<td class="n"><b>' + n(c.leads) + '</b></td>' +
+          '<td class="n">' + n(c.customers) + '</td>' +
+          '<td class="n"' + (br > 3 ? ' style="color:hsl(var(--destructive));font-weight:700"' : "") + '>' + pc(br, 2) + '</td>' +
+          '<td class="n">' + pc(rate(c.unsub, c.delivered), 2) + '</td>' +
+          '<td><span class="pill ' + health[0] + '">' + health[1] + '</span></td></tr>';
+      }).join("") +
+      '<tr style="background:hsl(var(--secondary)/.6)"><td><b>All campaigns</b></td><td></td><td></td>' +
+        '<td class="n"><b>' + n(T.delivered) + '</b></td><td class="n"><b>' + pc(rate(T.opens, T.delivered)) + '</b></td>' +
+        '<td class="n"><b>' + pc(rate(T.clicks, T.delivered), 2) + '</b></td><td class="n"><b>' + n(T.leads) + '</b></td>' +
+        '<td class="n"><b>' + n(T.customers) + '</b></td><td class="n"><b>' + pc(rate(T.bounced, T.sent), 2) + '</b></td>' +
+        '<td class="n"><b>' + pc(rate(T.unsub, T.delivered), 2) + '</b></td><td></td></tr>' +
+      '</tbody></table></div></div>' +
+
+    '<div class="grid g3">' +
+      '<div class="card"><header><div><h3>Most-clicked links</h3><p class="muted">Every link in every email, ranked. Sample period.</p></div></header>' +
+        '<div class="body">' + hbars(LINKS.slice(0, 6).map(function (l) {
+          return { label:l.label, right:n(l.unique), v:l.unique, sub:l.url + (l.leads ? " · " + l.leads + " leads" : "") };
+        }), { note:"Unique clicks. Tells you which promise in the email is actually doing the work." }) + '</div></div>' +
+
+      '<div class="card"><header><div><h3>Click rate by industry</h3><p class="muted">Where the message is landing.</p></div></header>' +
+        '<div class="body">' + hbars(INDUSTRIES.slice().sort(function (a, b) { return b.clickRate - a.clickRate; }).map(function (i) {
+          return { label:i.name, right:pc(i.clickRate, 2), v:i.clickRate, sub:n(i.contacts) + " contacts · " + pc(i.leadRate, 2) + " lead rate" };
+        }), { note:"Home Care leads on both click rate and lead rate — the bilingual sequence is the best-performing asset in the account." }) + '</div></div>' +
+
+      '<div class="card"><header><div><h3>Deliverability</h3><p class="muted">Against the Gmail and Yahoo bulk-sender thresholds.</p></div></header>' +
+        '<div class="body">' +
+          '<dl class="kv">' +
+            '<dt>Spam complaint rate</dt><dd><span class="pill pill-ok">' + pc(rate(T.spam, T.delivered), 3) + '</span></dd>' +
+            '<dt>Threshold</dt><dd class="muted">below 0.30%</dd>' +
+            '<dt>Hard bounce rate</dt><dd><span class="pill pill-warn">' + pc(rate(T.bounced, T.sent), 2) + '</span></dd>' +
+            '<dt>Unsubscribe rate</dt><dd>' + pc(rate(T.unsub, T.delivered), 2) + '</dd>' +
+            '<dt>Suppression list</dt><dd>' + n(145) + ' addresses</dd>' +
+          '</dl><div class="hr"></div>' +
+          '<div class="notice notice-warn"><div><b>Dental — Patient Intake needs attention</b>' +
+          'A 3.97% bounce rate on a purchased list. Pause it, verify the addresses, and resume at a lower volume — bounces at this level pull the sending domain\'s reputation down for every other campaign.</div></div>' +
+        '</div></div>' +
+    '</div>';
+
+  smallMultiples($("#lineHost"), {
+    labels:labels,
+    panels:[
+      { name:"Open rate",        values:SERIES.open,  color:cssv("--c2") },
+      { name:"Click rate",       values:SERIES.click, color:cssv("--c3") },
+      { name:"Unsubscribe rate", values:SERIES.unsub, color:cssv("--c4") }
+    ]
+  });
+};
+
+VIEWS.campaigns = function () {
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Campaigns</h1><p class="muted">Broadcasts, sequences and always-on automations in one list.</p></div>' +
+    '<div class="acts"><button class="btn">Import audience</button><button class="btn btn--primary">New campaign</button></div></div>' +
+    filterBar({ industry:true }) +
+    '<div class="grid g4" style="margin-bottom:1rem">' +
+      statTile({ label:"Live campaigns", value:"5", sub:"4 sequences · 1 automation" }) +
+      statTile({ label:"Queued to send", value:"1,204", sub:"next batch 8:00am AEST" }) +
+      statTile({ label:"Best click rate", value:"12.51%", sub:"Home Care — Bilingual Intake (ES)" }) +
+      statTile({ label:"Cost per lead", value:"$2.41", sub:"sending cost ÷ attributed leads" }) +
+    '</div>' +
+    '<div class="card"><div class="tblwrap"><table><thead><tr>' +
+      '<th>Campaign</th><th>Status</th><th>Audience</th><th class="n">Sent</th><th class="n">Delivered</th>' +
+      '<th class="n">Open</th><th class="n">Click</th><th class="n">CTOR</th><th class="n">Leads</th><th class="n">Cost/lead</th>' +
+    '</tr></thead><tbody>' +
+    CAMPAIGNS.map(function (c) {
+      var st = c.status === "Sending" ? "pill-ok" : c.status === "Live" ? "pill-ok" : "pill-mut";
+      return '<tr><td><button class="rowlink" data-camp="' + c.id + '">' + esc(c.name) + '</button>' +
+        '<div class="sub2">' + esc(c.type) + " · " + esc(c.sender) + '</div></td>' +
+        '<td><span class="pill ' + st + '">' + esc(c.status) + '</span></td>' +
+        '<td><span class="tag">industry:' + esc(c.industry.toLowerCase().replace(/ /g, "-")) + '</span></td>' +
+        '<td class="n">' + n(c.sent) + '</td><td class="n">' + n(c.delivered) + '</td>' +
+        '<td class="n">' + pc(rate(c.opens, c.delivered)) + '</td>' +
+        '<td class="n"><b>' + pc(rate(c.clicks, c.delivered), 2) + '</b></td>' +
+        '<td class="n">' + pc(rate(c.clicks, c.opens), 1) + '</td>' +
+        '<td class="n">' + n(c.leads) + '</td>' +
+        '<td class="n">' + (c.leads ? "$" + (c.sent * 0.00035 * 1000 / c.leads).toFixed(2) : "—") + '</td></tr>';
+    }).join("") + '</tbody></table></div></div>';
+};
+
+VIEWS.campaignDetail = function (id) {
+  var c = CAMPAIGNS.filter(function (x) { return x.id === (id || "c1"); })[0] || CAMPAIGNS[0];
+  var steps = [
+    { n:1, subj:"Your AI Receptionist ROI Report, {{first_name}}", sent:2140, open:48.2, click:9.1, leads:19 },
+    { n:2, subj:"What " + "{{missed_calls}}" + " missed calls a week actually costs", sent:1978, open:41.6, click:8.4, leads:11 },
+    { n:3, subj:"A 15-minute demo, and you keep the recording", sent:1802, open:38.9, click:7.7, leads:8 },
+    { n:4, subj:"Two HVAC shops, same week, different answer", sent:1244, open:34.1, click:5.2, leads:2 },
+    { n:5, subj:"Closing the file on this — unless?", sent:986, open:31.7, click:4.8, leads:1 }
+  ];
+  page.innerHTML =
+    '<div class="pagehead"><div>' +
+      '<button class="btn btn--sm" data-back="campaigns" style="margin-bottom:.5rem">&larr; All campaigns</button>' +
+      '<h1>' + esc(c.name) + '</h1>' +
+      '<p class="muted">' + esc(c.type) + ' · ' + esc(c.sender) + '@promptline.app · started ' + esc(c.start) + '</p></div>' +
+      '<div class="acts"><button class="btn">Duplicate</button><button class="btn">Pause</button><button class="btn btn--primary">Edit</button></div></div>' +
+    '<div class="grid g4" style="margin-bottom:1rem">' +
+      statTile({ label:"Delivered", value:n(c.delivered), sub:pc(rate(c.delivered, c.sent), 1) + " of " + n(c.sent) + " sent" }) +
+      statTile({ label:"Unique open rate", value:pc(rate(c.opens, c.delivered)), sub:n(c.opens) + " opens · directional only",
+                 info:"Apple MPP inflates this. Use click rate to compare campaigns." }) +
+      statTile({ label:"Unique click rate", value:pc(rate(c.clicks, c.delivered), 2), sub:pc(rate(c.clicks, c.opens), 1) + " click-to-open" }) +
+      statTile({ label:"Leads attributed", value:n(c.leads), sub:n(c.demos) + " demos · " + n(c.customers) + " customers" }) +
+    '</div>' +
+    '<div class="grid g2" style="margin-bottom:1rem">' +
+      '<div class="card"><header><div><h3>Per-step performance</h3><p class="muted">Which email in the sequence is carrying it.</p></div></header>' +
+        '<div class="tblwrap"><table><thead><tr><th>#</th><th>Subject</th><th class="n">Sent</th><th class="n">Open</th><th class="n">Click</th><th class="n">Leads</th></tr></thead><tbody>' +
+        steps.map(function (s) {
+          return '<tr><td class="n">' + s.n + '</td><td>' + esc(s.subj) + '</td><td class="n">' + n(s.sent) + '</td>' +
+            '<td class="n">' + pc(s.open) + '</td><td class="n"><b>' + pc(s.click, 2) + '</b></td><td class="n">' + s.leads + '</td></tr>';
+        }).join("") + '</tbody></table></div>' +
+        '<div class="body" style="padding-top:.6rem"><p class="sub2">Steps 4 and 5 produce 3 leads between them and carry the highest unsubscribe rate in the account. Cutting the sequence to three emails would cost almost nothing and protect the domain.</p></div></div>' +
+
+      '<div class="card"><header><div><h3>Link-level click-through</h3><p class="muted">Every tracked link in this campaign.</p></div></header>' +
+        '<div class="tblwrap"><table><thead><tr><th>Link</th><th class="n">Clicks</th><th class="n">Unique</th><th class="n">CTR</th><th class="n">Leads</th></tr></thead><tbody>' +
+        LINKS.map(function (l) {
+          return '<tr><td>' + esc(l.label) + '<div class="sub2">' + esc(l.url) + '</div></td>' +
+            '<td class="n">' + n(l.clicks) + '</td><td class="n">' + n(l.unique) + '</td>' +
+            '<td class="n">' + pc(rate(l.unique, c.delivered), 2) + '</td><td class="n">' + (l.leads || "—") + '</td></tr>';
+        }).join("") + '</tbody></table></div></div>' +
+    '</div>' +
+    '<div class="card"><header><div><h3>Who is in this campaign right now</h3>' +
+      '<p class="muted">Filter the recipient list by what each person actually did — then act on the selection.</p></div>' +
+      '<div class="r"><select class="f"><option>Everyone (2,140)</option><option>Opened, did not click (734)</option><option>Clicked, no lead (146)</option><option>Bounced (42)</option><option>Unsubscribed (12)</option></select>' +
+      '<button class="btn btn--sm">Tag selection</button><button class="btn btn--sm btn--primary">Start a follow-up</button></div></header>' +
+      '<div class="tblwrap"><table><thead><tr><th>Contact</th><th>Company</th><th>Tags</th><th>Last action</th><th class="n">Opens</th><th class="n">Clicks</th><th>Engagement</th></tr></thead><tbody>' +
+      CONTACTS.filter(function (p) { return p.industry === c.industry || c.industry === "All"; }).slice(0, 6).map(function (p) {
+        return '<tr><td><button class="rowlink" data-contact="' + p.id + '">' + esc(p.name) + '</button><div class="sub2">' + esc(p.email) + '</div></td>' +
+          '<td>' + esc(p.company) + '</td><td>' + p.tags.slice(0, 2).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join(" ") + '</td>' +
+          '<td class="sub2">' + esc(p.last) + '</td><td class="n">' + p.opens + '</td><td class="n">' + p.clicks + '</td><td>' + engPill(p.eng) + '</td></tr>';
+      }).join("") + '</tbody></table></div></div>';
+};
+
+VIEWS.contacts = function (skipFocus) {
+  var rows = CONTACTS.filter(function (p) {
+    if (STATE.industry !== "all" && p.industry !== STATE.industry) return false;
+    if (STATE.eng !== "all" && p.eng !== STATE.eng) return false;
+    if (STATE.q) {
+      var q = STATE.q.toLowerCase();
+      if ((p.name + p.email + p.company).toLowerCase().indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Contacts</h1><p class="muted">' + n(2847) + ' total · ' + n(2628) + ' mailable · ' + n(145) + ' suppressed · ' + n(74) + ' unsubscribed</p></div>' +
+    '<div class="acts"><button class="btn">Sync calculator leads</button><button class="btn">Import CSV</button><button class="btn btn--primary">Add contact</button></div></div>' +
+    filterBar({ industry:true, eng:true, source:true, tag:true, search:true }) +
+    '<div class="grid g4" style="margin-bottom:1rem">' +
+      statTile({ label:"Mailable", value:n(2628), sub:"92.3% of the list", delta:+4.1, deltaUnit:"%" }) +
+      statTile({ label:"Engaged (90 days)", value:n(1186), sub:"opened or clicked at least once" }) +
+      statTile({ label:"Cold", value:n(397), sub:"no activity in 60 days — auto-tagged" }) +
+      statTile({ label:"Suppressed", value:n(145), sub:"bounced, complained or unsubscribed" }) +
+    '</div>' +
+    '<div class="card"><header><div><h3>' + n(rows.length) + ' matching contacts</h3>' +
+      '<p class="muted">Selection acts on everyone matching the filters, not just this page.</p></div>' +
+      '<div class="r"><button class="btn btn--sm">Add tag</button><button class="btn btn--sm">Remove tag</button>' +
+      '<button class="btn btn--sm">Save as segment</button><button class="btn btn--sm btn--primary">Send to campaign</button></div></header>' +
+      '<div class="tblwrap"><table><thead><tr>' +
+        '<th style="width:28px"><input type="checkbox"></th><th>Contact</th><th>Company</th><th>Industry</th><th>Tags</th>' +
+        '<th>Source</th><th class="n">Monthly loss</th><th class="n">Opens</th><th class="n">Clicks</th><th>Engagement</th><th>Last activity</th>' +
+      '</tr></thead><tbody>' +
+      (rows.length ? rows.map(function (p) {
+        return '<tr><td><input type="checkbox"></td>' +
+          '<td><button class="rowlink" data-contact="' + p.id + '">' + esc(p.name) + '</button><div class="sub2">' + esc(p.email) + '</div></td>' +
+          '<td>' + esc(p.company) + '</td><td><span class="tag ind">' + esc(p.industry) + '</span></td>' +
+          '<td>' + p.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join(" ") + '</td>' +
+          '<td class="sub2">' + esc(p.src) + '</td>' +
+          '<td class="n">' + (p.loss ? "$" + n(p.loss) : "—") + '</td>' +
+          '<td class="n">' + p.opens + '</td><td class="n">' + p.clicks + '</td>' +
+          '<td>' + engPill(p.eng) + '</td><td class="sub2">' + esc(p.last) + '</td></tr>';
+      }).join("") : '<tr><td colspan="11" style="padding:2rem;text-align:center" class="muted">No contacts match these filters.</td></tr>') +
+      '</tbody></table></div></div>' +
+    '<p class="sub2" style="margin-top:.8rem;max-width:80ch">Note on filtering by "click rate": a single contact does not have a meaningful click rate — over three emails it can only ever be 0%, 33%, 67% or 100%. Engagement state (hot / warm / cold, derived from recency and frequency) is the filter that actually works at contact level. Click rate belongs on campaigns and segments, where the denominator is large enough to mean something.</p>';
+  if (skipFocus && $("#fQ")) { var f = $("#fQ"); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
+};
+
+VIEWS.contactDetail = function (id) {
+  var p = CONTACTS.filter(function (x) { return x.id === (id || "p1"); })[0] || CONTACTS[0];
+  var col = { contact:"--c1", tag:"--c4", seq:"--c1", send:"--c1", open:"--c2", click:"--c3", lead:"--c2", note:"--c4" };
+  page.innerHTML =
+    '<div class="pagehead"><div>' +
+      '<button class="btn btn--sm" data-back="contacts" style="margin-bottom:.5rem">&larr; All contacts</button>' +
+      '<h1>' + esc(p.name) + '</h1><p class="muted">' + esc(p.email) + ' · ' + esc(p.company) + '</p></div>' +
+      '<div class="acts"><button class="btn">Add tag</button><button class="btn">Add to sequence</button><button class="btn btn--primary">Send email</button></div></div>' +
+    '<div class="grid g4" style="margin-bottom:1rem">' +
+      statTile({ label:"Engagement", value:p.eng, sub:"last activity " + p.last }) +
+      statTile({ label:"Opens / clicks", value:p.opens + " / " + p.clicks, sub:"lifetime" }) +
+      statTile({ label:"Estimated monthly loss", value:p.loss ? "$" + n(p.loss) : "—", sub:"from the ROI calculator" }) +
+      statTile({ label:"Attributed to", value:"HVAC seq.", sub:"first touch 2 Sep · last touch 8 Sep" }) +
+    '</div>' +
+    '<div class="grid g2">' +
+      '<div class="card span2" style="grid-column:span 1"><header><div><h3>Activity timeline</h3>' +
+        '<p class="muted">Every event, including every tag added or removed and what put it there.</p></div>' +
+        '<div class="r"><select class="f"><option>All events</option><option>Tags only</option><option>Email only</option><option>Notes only</option></select></div></header>' +
+        '<div class="body"><div class="tl">' +
+        TIMELINE.map(function (e) {
+          return '<div class="tlrow"><span class="tldot" style="background:' + cssv(col[e.k] || "--c1") + '"></span>' +
+            '<h4>' + esc(e.h) + '</h4><p>' + esc(e.p) + '</p><time>' + esc(e.t) + '</time></div>';
+        }).join("") + '</div></div></div>' +
+
+      '<div style="display:flex;flex-direction:column;gap:1rem">' +
+        '<div class="card"><header><div><h3>Tags</h3><p class="muted">Automation-applied tags show their rule.</p></div></header><div class="body">' +
+          p.tags.map(function (t) {
+            var r = TAGS.filter(function (x) { return x.name === t; })[0];
+            return '<div style="display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.55rem">' +
+              '<span class="tag ind">' + esc(t) + '</span>' +
+              '<span class="sub2" style="flex:1">' + esc(r ? (r.auto ? "Auto — " + r.rule : "Added by hand") : "Added by hand") + '</span>' +
+              '<button class="btn btn--sm">Remove</button></div>';
+          }).join("") + '</div></div>' +
+        '<div class="card"><header><div><h3>Campaign history</h3></div></header><div class="tblwrap"><table><thead><tr><th>Campaign</th><th class="n">Sent</th><th class="n">Opened</th><th class="n">Clicked</th></tr></thead><tbody>' +
+          '<tr><td>HVAC — Missed-Call Recovery</td><td class="n">3</td><td class="n">3</td><td class="n">2</td></tr>' +
+          '<tr><td>ROI Calculator Follow-up</td><td class="n">2</td><td class="n">1</td><td class="n">1</td></tr>' +
+          '<tr><td>Product update — Sep</td><td class="n">1</td><td class="n">0</td><td class="n">0</td></tr>' +
+          '</tbody></table></div></div>' +
+        '<div class="card"><header><div><h3>Consent and compliance</h3></div></header><div class="body"><dl class="kv">' +
+          '<dt>Consent source</dt><dd>ROI calculator</dd>' +
+          '<dt>Captured</dt><dd>2 Sep 2026, 09:14</dd>' +
+          '<dt>IP at capture</dt><dd>—</dd>' +
+          '<dt>Subscription status</dt><dd><span class="pill pill-ok">Subscribed</span></dd>' +
+          '<dt>Topics</dt><dd>Product, Offers</dd>' +
+        '</dl><p class="sub2" style="margin-top:.6rem">Consent provenance is stored per contact so a complaint can always be answered with a record.</p></div></div>' +
+      '</div>' +
+    '</div>';
+};
+
+VIEWS.segments = function () {
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Tags &amp; Segments</h1>' +
+    '<p class="muted">Tags are facts about a contact. Segments are live queries over those facts.</p></div>' +
+    '<div class="acts"><button class="btn">New tag</button><button class="btn btn--primary">New automation rule</button></div></div>' +
+    '<div class="grid g2" style="margin-bottom:1rem">' +
+      '<div class="card"><header><div><h3>Tags</h3><p class="muted">' + TAGS.length + ' tags · ' + TAGS.filter(function (t) { return t.auto; }).length + ' applied automatically</p></div></header>' +
+        '<div class="tblwrap"><table><thead><tr><th>Tag</th><th class="n">Contacts</th><th>Applied by</th></tr></thead><tbody>' +
+        TAGS.map(function (t) {
+          return '<tr><td><span class="tag ind">' + esc(t.name) + '</span></td><td class="n">' + n(t.n) + '</td>' +
+            '<td>' + (t.auto ? '<span class="pill pill-ok">Automation</span>' : '<span class="pill pill-mut">Manual</span>') +
+            '<div class="sub2">' + esc(t.rule) + '</div></td></tr>';
+        }).join("") + '</tbody></table></div></div>' +
+
+      '<div class="card"><header><div><h3>Saved segments</h3><p class="muted">Recalculated on every send — never a stale list.</p></div></header>' +
+        '<div class="tblwrap"><table><thead><tr><th>Segment</th><th>Definition</th><th class="n">Size</th></tr></thead><tbody>' +
+        [["High-intent HVAC","industry:hvac AND value:high AND NOT suppressed","128"],
+         ["Spanish-speaking prospects","lang:es AND status = active","214"],
+         ["Clicked but never booked","clicked in 30d AND NOT stage:demo-booked","146"],
+         ["Cold — needs re-permission","engagement:cold AND added before 1 Jul","397"],
+         ["Calculator, high loss, no reply","source:calculator AND monthly_loss > 3000 AND opens = 0","83"],
+         ["Customers (exclude from outbound)","stage:customer","6"]].map(function (r) {
+          return '<tr><td><b>' + esc(r[0]) + '</b></td><td class="sub2">' + esc(r[1]) + '</td><td class="n">' + r[2] + '</td></tr>';
+        }).join("") + '</tbody></table></div></div>' +
+    '</div>' +
+    '<div class="card"><header><div><h3>Automation rules</h3>' +
+      '<p class="muted">Plain when / if / then rules. No drag-and-drop canvas — a canvas is a nice demo and a maintenance problem at this size.</p></div>' +
+      '<div class="r"><button class="btn btn--sm btn--primary">New rule</button></div></header>' +
+      '<div class="tblwrap"><table><thead><tr><th>When</th><th>If</th><th>Then</th><th class="n">Total runs</th><th class="n">Last 7d</th><th></th></tr></thead><tbody>' +
+      RULES.map(function (r) {
+        return '<tr><td><b>' + esc(r.on) + '</b></td><td class="sub2">' + esc(r.cond) + '</td>' +
+          '<td>' + r.then.map(function (t) { return '<div style="font-size:12.5px">' + esc(t) + '</div>'; }).join("") + '</td>' +
+          '<td class="n">' + n(r.runs) + '</td><td class="n">' + n(r.on7) + '</td>' +
+          '<td><span class="pill pill-ok">On</span></td></tr>';
+      }).join("") + '</tbody></table></div></div>';
+};
+
+VIEWS.sequences = function () {
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Sequences</h1><p class="muted">Industry-specific email series that run themselves.</p></div>' +
+    '<div class="acts"><button class="btn btn--primary">New sequence</button></div></div>' +
+    '<div class="card" style="margin-bottom:1rem"><div class="tblwrap"><table><thead><tr>' +
+      '<th>Sequence</th><th>Language</th><th class="n">Steps</th><th class="n">Active now</th><th class="n">Completed</th><th class="n">Click rate</th><th class="n">Lead rate</th>' +
+    '</tr></thead><tbody>' +
+    SEQUENCES.map(function (s) {
+      return '<tr><td><b>' + esc(s.name) + '</b></td><td><span class="tag">' + esc(s.lang) + '</span></td>' +
+        '<td class="n">' + s.steps + '</td><td class="n">' + n(s.active) + '</td><td class="n">' + n(s.done) + '</td>' +
+        '<td class="n"><b>' + pc(s.clickRate, 2) + '</b></td><td class="n">' + pc(s.leadRate, 2) + '</td></tr>';
+    }).join("") + '</tbody></table></div></div>' +
+    '<div class="grid g2">' +
+      '<div class="card"><header><div><h3>HVAC — Missed-Call Recovery</h3><p class="muted">Steps, waits and exit conditions.</p></div></header><div class="body">' +
+        [["Enter","Tag industry:hvac added"],
+         ["Step 1","Day 0 — Your AI Receptionist ROI Report"],
+         ["Wait","3 days, business days only"],
+         ["Step 2","Day 3 — What 14 missed calls a week actually costs"],
+         ["Wait","3 days"],
+         ["Step 3","Day 6 — A 15-minute demo, and you keep the recording"],
+         ["Exit","Clicked /book-a-demo, replied, unsubscribed, or became a customer"]].map(function (r, i, a) {
+          var last = i === a.length - 1;
+          return '<div style="display:grid;grid-template-columns:76px 1fr;gap:.6rem;align-items:start;padding-bottom:' + (last ? 0 : ".7rem") + '">' +
+            '<span class="pill ' + (r[0] === "Wait" ? "pill-mut" : r[0] === "Exit" ? "pill-warn" : "pill-ok") + '">' + esc(r[0]) + '</span>' +
+            '<span style="font-size:12.5px">' + esc(r[1]) + '</span></div>';
+        }).join("") +
+        '<div class="hr"></div><p class="sub2">Exit conditions matter more than steps. A prospect who books a demo must stop receiving the pitch that same minute, or the sequence undoes the sale.</p>' +
+      '</div></div>' +
+      '<div class="card"><header><div><h3>Why only four block types</h3></div></header><div class="body">' +
+        '<p class="sectionlead">Kit ships a full visual automation canvas. At PromptLine\'s list size it would be a demo feature that nobody maintains. Four blocks — <b>send</b>, <b>wait</b>, <b>condition</b>, <b>tag</b> — cover every sequence in this account today, and they are readable in a table, diffable in git, and testable.</p>' +
+        '<p class="sectionlead">The canvas is a Phase 3 conversation, once there are more than about twenty live sequences and the table stops being legible. Not before.</p>' +
+      '</div></div>' +
+    '</div>';
+};
+
+VIEWS.templates = function () {
+  var tpls = [
+    { name:"ROI Calculator Follow-up", cat:"Follow-up", subj:"Your PromptLine ROI report, {{first_name}}", pre:"Based on the numbers you entered for {{company}}", sends:1624, click:4.19, ab:false },
+    { name:"AI Receptionist Demo Invite", cat:"Demo invite", subj:"{{first_name}}, see PromptLine answer a live call", pre:"Fifteen minutes, and you keep the recording", sends:1802, click:7.70, ab:true },
+    { name:"Missed-Call Cost Breakdown", cat:"Nurture", subj:"What {{missed_calls}} missed calls a week actually costs", pre:"The arithmetic, not the pitch", sends:1978, click:8.41, ab:false },
+    { name:"Recepcionista Bilingüe (ES)", cat:"Nurture", subj:"{{first_name}}, cada llamada contestada — en español", pre:"Su recepcionista responde en español y en inglés", sends:967, click:12.51, ab:false },
+    { name:"Breakup — closing the file", cat:"Breakup", subj:"Closing the file on this — unless?", pre:"Last one from me", sends:986, click:4.80, ab:false }
+  ];
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Templates</h1><p class="muted">Reusable emails with a preheader, a plain-text part and a required test send.</p></div>' +
+    '<div class="acts"><button class="btn">Import HTML</button><button class="btn btn--primary">New template</button></div></div>' +
+    '<div class="notice notice-info" style="margin-bottom:1rem"><div><b>Three gaps carried over from v1</b>' +
+      'The current editor has no preheader field, no plain-text alternative, and no test send before a template goes live. All three affect deliverability directly: a missing plain-text part is one of the oldest spam-filter signals there is, and the preheader is the second line every inbox shows.</div></div>' +
+    '<div class="card"><div class="tblwrap"><table><thead><tr>' +
+      '<th>Template</th><th>Category</th><th>Subject &amp; preheader</th><th class="n">Sends</th><th class="n">Click rate</th><th>A/B</th><th>Checks</th>' +
+    '</tr></thead><tbody>' +
+    tpls.map(function (t) {
+      return '<tr><td><b>' + esc(t.name) + '</b></td><td><span class="tag">' + esc(t.cat) + '</span></td>' +
+        '<td>' + esc(t.subj) + '<div class="sub2">' + esc(t.pre) + '</div></td>' +
+        '<td class="n">' + n(t.sends) + '</td><td class="n"><b>' + pc(t.click, 2) + '</b></td>' +
+        '<td>' + (t.ab ? '<span class="pill pill-ok">B winning +1.2pp</span>' : '<span class="pill pill-mut">Off</span>') + '</td>' +
+        '<td><span class="pill pill-ok">Text part</span> <span class="pill pill-ok">Unsub link</span></td></tr>';
+    }).join("") + '</tbody></table></div></div>';
+};
+
+VIEWS.deliverability = function () {
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Deliverability</h1>' +
+    '<p class="muted">Authentication, reputation and suppression — the things that decide whether any of the rest matters.</p></div></div>' +
+    '<div class="grid g4" style="margin-bottom:1rem">' +
+      statTile({ label:"Spam complaint rate", value:pc(rate(T.spam, T.delivered), 3), sub:"Gmail and Yahoo threshold: 0.30%" }) +
+      statTile({ label:"Hard bounce rate", value:pc(rate(T.bounced, T.sent), 2), sub:"keep under 2% — currently borderline" }) +
+      statTile({ label:"Unsubscribe rate", value:pc(rate(T.unsub, T.delivered), 2), sub:"healthy for cold outbound" }) +
+      statTile({ label:"Suppressed addresses", value:n(145), sub:"never sent to again, automatically" }) +
+    '</div>' +
+    '<div class="grid g2" style="margin-bottom:1rem">' +
+      '<div class="card"><header><div><h3>Sending domain</h3><p class="muted">A dedicated subdomain, so marketing volume can never damage the mailbox the founders actually use.</p></div></header>' +
+        '<div class="tblwrap"><table><thead><tr><th>Record</th><th>Host</th><th>Status</th></tr></thead><tbody>' +
+        [["SPF","send.promptline.app","ok","v=spf1 include:amazonses.com ~all"],
+         ["DKIM","resend._domainkey.send.promptline.app","ok","2048-bit, rotated 12 Aug"],
+         ["DMARC","_dmarc.promptline.app","warn","p=none — move to p=quarantine once reports are clean"],
+         ["Return-Path","bounce.send.promptline.app","ok","aligned"],
+         ["BIMI","default._bimi.promptline.app","off","optional — needs a VMC certificate"],
+         ["TLS-RPT","_smtp._tls.promptline.app","off","optional"]].map(function (r) {
+          var cls = r[2] === "ok" ? "pill-ok" : r[2] === "warn" ? "pill-warn" : "pill-mut";
+          var lbl = r[2] === "ok" ? "Verified" : r[2] === "warn" ? "Action needed" : "Not set";
+          return '<tr><td><b>' + esc(r[0]) + '</b></td><td class="sub2">' + esc(r[1]) + '<div>' + esc(r[3]) + '</div></td>' +
+            '<td><span class="pill ' + cls + '">' + lbl + '</span></td></tr>';
+        }).join("") + '</tbody></table></div></div>' +
+
+      '<div class="card"><header><div><h3>Compliance</h3><p class="muted">Not optional once volume passes 5,000 a day to any one provider.</p></div></header><div class="body">' +
+        [["One-click unsubscribe headers","ok","List-Unsubscribe and List-Unsubscribe-Post on every marketing send"],
+         ["Unsubscribe honoured within 48 hours","ok","Processed instantly, well inside Google's 48-hour requirement"],
+         ["Visible unsubscribe link in the body","ok","Rendered in the footer of every marketing template"],
+         ["Physical postal address in the footer","warn","Required by CAN-SPAM — not yet set"],
+         ["Marketing and transactional separated","ok","Different subdomains, different reputations"],
+         ["Consent provenance stored per contact","ok","Source, timestamp and form recorded at capture"],
+         ["Suppression enforced across all senders","ok","One list, applied before every send"]].map(function (r) {
+          return '<div style="display:flex;gap:.6rem;align-items:flex-start;padding:.45rem 0;border-bottom:1px solid hsl(var(--border))">' +
+            '<span class="pill ' + (r[1] === "ok" ? "pill-ok" : "pill-warn") + '">' + (r[1] === "ok" ? "Done" : "To do") + '</span>' +
+            '<div><div style="font-size:12.5px;font-weight:600">' + esc(r[0]) + '</div><div class="sub2">' + esc(r[2]) + '</div></div></div>';
+        }).join("") + '</div></div>' +
+    '</div>' +
+    '<div class="card"><header><div><h3>Suppression list</h3><p class="muted">One list across every sender. A send that ignores it is a bug, not a choice.</p></div>' +
+      '<div class="r"><button class="btn btn--sm">Export</button><button class="btn btn--sm">Add address</button></div></header>' +
+      '<div class="tblwrap"><table><thead><tr><th>Reason</th><th class="n">Addresses</th><th>What it means</th></tr></thead><tbody>' +
+      SUPPRESSIONS.map(function (s) {
+        return '<tr><td><b>' + esc(s.reason) + '</b></td><td class="n">' + n(s.n) + '</td><td class="sub2">' + esc(s.note) + '</td></tr>';
+      }).join("") + '</tbody></table></div></div>';
+};
+
+VIEWS.senders = function () {
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Senders</h1><p class="muted">Who the email comes from, and how that identity is authorised.</p></div>' +
+    '<div class="acts"><button class="btn btn--primary">Connect sender</button></div></div>' +
+    '<div class="notice notice-warn" style="margin-bottom:1rem"><div><b>The v1 connection flow should not ship as it is</b>' +
+      'It asks a person to generate a Zoho OAuth <em>refresh token</em> by hand and paste it into a browser field, and the client then writes it straight into a table it also reads with <code>select("*")</code>. A refresh token is a long-lived credential: it should be exchanged server-side and stored encrypted, never handled as text in a form. It also breaks silently the moment the token rotates.</div></div>' +
+    '<div class="grid g3">' +
+      [["Ranjit","ranjit@promptline.app","ok","Verified · 6,420 sent this month"],
+       ["Prashant","prashant@promptline.app","ok","Verified · 1,460 sent this month"],
+       ["Shantanu","shantanu@promptline.app","ok","Verified · 980 sent this month"]].map(function (s) {
+        return '<div class="card"><div class="body">' +
+          '<div style="display:flex;gap:.7rem;align-items:center;margin-bottom:.7rem">' +
+          '<div class="avatar">' + esc(s[0][0]) + '</div><div><b style="font-size:14px">' + esc(s[0]) + '</b>' +
+          '<div class="sub2">' + esc(s[1]) + '</div></div>' +
+          '<span class="pill pill-ok" style="margin-left:auto">Verified</span></div>' +
+          '<dl class="kv"><dt>Domain</dt><dd>send.promptline.app</dd><dt>Reply-to</dt><dd>' + esc(s[1]) + '</dd>' +
+          '<dt>Daily cap</dt><dd>5,000</dd><dt>Auth</dt><dd>Server-side API key</dd></dl>' +
+          '<div class="hr"></div><div class="sub2">' + esc(s[3]) + '</div></div></div>';
+      }).join("") +
+    '</div>' +
+    '<div class="card" style="margin-top:1rem"><header><div><h3>Why the transport has to change</h3></div></header><div class="body">' +
+      '<p class="sectionlead">v1 sends through the Zoho Mail API with the <code>ZohoMail.messages.CREATE</code> scope. That is a mailbox API: it puts a message in a mailbox and hands back an id. It does not report deliveries, opens, clicks, bounces or complaints, it has no suppression list, and it has no webhook to tell the dashboard anything happened.</p>' +
+      '<p class="sectionlead">Nothing on any other screen in this prototype can be built on top of it. The open rate, the click rate, the per-link breakdown, the bounce handling, the suppression list and the attribution all need send-side events, and a mailbox API does not produce them. Moving the transport to a sending API is not a feature — it is the precondition for the rest.</p>' +
+    '</div></div>';
+};
+
+VIEWS.attribution = function () {
+  page.innerHTML =
+    '<div class="pagehead"><div><h1>Attribution</h1>' +
+    '<p class="muted">Which email produced which lead, and which lead became revenue.</p></div></div>' +
+    filterBar({ industry:true }) +
+    '<div class="grid g4" style="margin-bottom:1rem">' +
+      statTile({ label:"Attributed leads", value:n(T.leads), sub:"clicked, then converted within 30 days" }) +
+      statTile({ label:"Demos booked", value:n(T.demos), sub:pc(rate(T.demos, T.leads), 1) + " of attributed leads" }) +
+      statTile({ label:"New customers", value:n(T.customers), sub:pc(rate(T.customers, T.demos), 1) + " of demos" }) +
+      statTile({ label:"New MRR from email", value:"$" + n(T.customers * 99), sub:"$" + (T.customers * 99 * 12).toLocaleString() + " annualised" }) +
+    '</div>' +
+    '<div class="card" style="margin-bottom:1rem"><header><div><h3>Lead source, by campaign</h3>' +
+      '<p class="muted">First touch and last touch, side by side. They disagree, and the disagreement is the useful part.</p></div></header>' +
+      '<div class="tblwrap"><table><thead><tr><th>Campaign</th><th class="n">Clicks</th><th class="n">Leads (last touch)</th>' +
+      '<th class="n">Leads (first touch)</th><th class="n">Click → lead</th><th class="n">Demos</th><th class="n">Customers</th><th class="n">MRR</th></tr></thead><tbody>' +
+      CAMPAIGNS.map(function (c, i) {
+        var ft = Math.max(0, c.leads + [6, -3, -4, 2, 5, -6][i]);
+        return '<tr><td>' + esc(c.name) + '</td><td class="n">' + n(c.clicks) + '</td>' +
+          '<td class="n"><b>' + n(c.leads) + '</b></td><td class="n">' + n(ft) + '</td>' +
+          '<td class="n">' + pc(rate(c.leads, c.clicks), 1) + '</td><td class="n">' + n(c.demos) + '</td>' +
+          '<td class="n">' + n(c.customers) + '</td><td class="n">$' + n(c.customers * 99) + '</td></tr>';
+      }).join("") + '</tbody></table></div>' +
+      '<div class="body" style="padding-top:.7rem"><p class="sub2">The evergreen calculator follow-up looks weak on last touch (9 leads) and much stronger on first touch — it is the email that starts the relationship, then an industry sequence closes it. Judged on last touch alone it would have been switched off.</p></div></div>' +
+    '<div class="grid g2">' +
+      '<div class="card"><header><div><h3>How a lead is attributed</h3></div></header><div class="body">' +
+        '<p class="sectionlead">Every link in every send is rewritten with a click id. The click id is set as a first-party cookie on the landing page and posted with the calculator or contact form. When a form arrives with a click id, the lead is joined to the exact send, step, campaign and contact.</p>' +
+        '<p class="sectionlead">When the cookie is missing — a different device, a blocked cookie — the fallback is an email match against contacts that clicked in the previous 30 days. Matches found that way are labelled <em>inferred</em> in the table rather than quietly counted as certain.</p>' +
+      '</div></div>' +
+      '<div class="card"><header><div><h3>Revenue join</h3></div></header><div class="body">' +
+        '<p class="sectionlead">The marketing tables and the product tables live in the same database. A new tenant whose billing email matches an attributed contact closes the loop from a click to paid MRR without an external analytics tool, and without exporting customer data anywhere.</p>' +
+        '<p class="sectionlead">This is the one thing a white-label dashboard can do that Kit and Resend structurally cannot — they never see the product database. It is the reason to build this rather than buy it.</p>' +
+      '</div></div>' +
+    '</div>';
+};
+
+/* ----------------------------- router -----------------------------------
+   One delegated listener per event type, bound once. Binding inside each view
+   would stack a new handler on #page at every render, and stale handlers from
+   earlier views then fire on the same click.                                 */
+var current = "dashboard", currentArg;
+function go(view, arg) {
+  current = view; currentArg = arg;
+  window.scrollTo({ top:0, behavior:"instant" });
+  (VIEWS[view] || VIEWS.dashboard)(arg);
+  var map = { campaignDetail:"campaigns", contactDetail:"contacts" };
+  var active = map[view] || view;
+  Array.prototype.forEach.call(document.querySelectorAll(".navlink"), function (b) {
+    b.classList.toggle("on", b.dataset.view === active);
+  });
+}
+function rerender(keepFocus) { (VIEWS[current] || VIEWS.dashboard)(keepFocus ? true : currentArg); }
+
+page.addEventListener("click", function (e) {
+  var t;
+  if ((t = e.target.closest("[data-camp]")))    return go("campaignDetail", t.dataset.camp);
+  if ((t = e.target.closest("[data-contact]"))) return go("contactDetail", t.dataset.contact);
+  if ((t = e.target.closest("[data-back]")))    return go(t.dataset.back);
+  if ((t = e.target.closest("#rangeSeg button[data-r]"))) { STATE.range = t.dataset.r; return rerender(); }
+  if ((t = e.target.closest("[data-clear]"))) {
+    var c = t.dataset.clear;
+    if (c.indexOf("Industry") === 0) STATE.industry = "all";
+    if (c.indexOf("Engagement") === 0) STATE.eng = "all";
+    return rerender();
+  }
+});
+page.addEventListener("change", function (e) {
+  if (e.target.id === "fInd") { STATE.industry = e.target.value; rerender(); }
+  if (e.target.id === "fEng") { STATE.eng = e.target.value; rerender(); }
+});
+page.addEventListener("input", function (e) {
+  if (e.target.id === "fQ") { STATE.q = e.target.value; rerender(true); }
+});
+
+document.querySelectorAll(".navlink").forEach(function (b) {
+  b.addEventListener("click", function () { go(b.dataset.view); });
+});
+document.getElementById("themeBtn").addEventListener("click", function () {
+  document.documentElement.classList.toggle("dark");
+  rerender();
+});
+var ro;
+window.addEventListener("resize", function () { clearTimeout(ro); ro = setTimeout(function () { rerender(); }, 220); });
+
+go("dashboard");
+})();
+
+</script>
+</body>
+</html>

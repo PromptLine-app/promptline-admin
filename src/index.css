@@ -56,6 +56,17 @@
   --elevation-1: 0 8px 24px rgba(15, 23, 42, 0.06);
   --elevation-2: 0 12px 40px rgba(15, 23, 42, 0.1);
   --surface-glass: rgba(255, 255, 255, 0.6);
+
+  /* Marketing Dashboard Variables */
+  --c1: #1c6fd0; 
+  --c2: #0f8f62; 
+  --c3: #a86f00; 
+  --c4: #6d4ac9; 
+  --seq1: #cfe0f6; --seq2: #9dc0ed; --seq3: #6b9fe3; --seq4: #3a80da;
+  --seq5: #1c6fd0; --seq6: #12508f; --seq7: #0b3560;
+  --grid: rgba(15, 23, 42, 0.08);
+  --axis: rgba(15, 23, 42, 0.45);
+  --surface-chart: #ffffff;
 }
 
 .dark {
@@ -107,6 +118,17 @@
   --elevation-1: 0 8px 24px rgba(0, 0, 0, 0.25);
   --elevation-2: 0 12px 40px rgba(0, 0, 0, 0.35);
   --surface-glass: rgba(30, 41, 59, 0.6);
+
+  /* Marketing Dashboard Dark Variables */
+  --c1: #3d8ae8;
+  --c2: #1baf7a;
+  --c3: #bf8200;
+  --c4: #8d6ae0;
+  --seq1: #14304f; --seq2: #1a4573; --seq3: #215b97; --seq4: #2872bd;
+  --seq5: #3d8ae8; --seq6: #6da8ee; --seq7: #9cc5f4;
+  --grid: rgba(255, 255, 255, 0.07);
+  --axis: rgba(255, 255, 255, 0.45);
+  --surface-chart: #12192b;
 }
 
 /* === Global Reset & Base === */

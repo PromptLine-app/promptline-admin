@@ -1,4 +1,4 @@
-﻿import { NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   FiMail,
   FiFileText,
@@ -31,6 +31,26 @@ export const MarketingSideNav = () => {
             >
               <span className="side-nav__icon"><FiBarChart2 /></span>
               Dashboard
+            </NavLink>
+          </div>
+        </div>
+
+        <div className="side-nav__section">
+          <p className="side-nav__section-label">Campaigns</p>
+          <div className="side-nav__section-links">
+            <NavLink
+              to="/marketing/campaigns"
+              className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}
+            >
+              <span className="side-nav__icon"><FiSend /></span>
+              All Campaigns
+            </NavLink>
+            <NavLink
+              to="/marketing/sequences"
+              className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}
+            >
+              <span className="side-nav__icon"><FiFileText /></span>
+              Sequences
             </NavLink>
           </div>
         </div>
