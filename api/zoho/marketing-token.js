@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   try {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-    const { code } = body;
+    const { code, redirect_uri } = body;
 
     if (!code) {
       return res.status(400).json({ error: "Missing authorization code" });
@@ -28,6 +28,9 @@ export default async function handler(req, res) {
       client_secret: clientSecret,
       code,
     });
+    if (redirect_uri) {
+      params.append("redirect_uri", redirect_uri);
+    }
 
     const tokenResponse = await fetch("https://accounts.zoho.com/oauth/v2/token", {
       method: "POST",
