@@ -26,6 +26,13 @@ const ZohoCallbackPage = () => {
   useEffect(() => {
     const code = searchParams.get('code');
     const errorParam = searchParams.get('error');
+    const state = searchParams.get('state');
+
+    // Intercept marketing sender connection callback
+    if (state && state.startsWith('marketing:')) {
+      navigate(`/marketing/senders?code=${code}&state=${state}${errorParam ? `&error=${errorParam}` : ''}`, { replace: true });
+      return;
+    }
 
     // Already signed in (e.g. a stray re-visit) — go home.
     if (session) {

@@ -30,3 +30,21 @@ export const beginZohoLogin = () => {
     `&access_type=offline&prompt=consent`;
   window.location.href = url;
 };
+
+/** Kick off Zoho OAuth for connecting a marketing sender mailbox. */
+export const beginZohoMarketingAuth = (senderId: string) => {
+  const clientId = import.meta.env.VITE_ZOHO_CLIENT_ID as string | undefined;
+  if (!clientId) {
+    throw new Error("Zoho is not configured for this environment.");
+  }
+  const scope = "ZohoMail.messages.CREATE,ZohoMail.accounts.READ";
+  const state = `marketing:${senderId}`;
+  const url =
+    `https://accounts.zoho.com/oauth/v2/auth?response_type=code` +
+    `&client_id=${clientId}` +
+    `&scope=${scope}` +
+    `&redirect_uri=${encodeURIComponent(zohoRedirectUri())}` +
+    `&state=${encodeURIComponent(state)}` +
+    `&access_type=offline&prompt=consent`;
+  window.location.href = url;
+};
