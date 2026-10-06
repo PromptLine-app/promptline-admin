@@ -37,25 +37,43 @@ export const SendersPage = () => {
   useEffect(() => { loadSenders(); }, [loadSenders]);
 
   const handleConnectWithToken = async (senderId: string) => {
-    if (!tokenInput.trim()) { toast('Please enter the Zoho refresh token', 'error'); return; }
+    const code = tokenInput.trim();
+    if (!code) { toast('Please enter the Zoho authorization code', 'error'); return; }
     setSaving(senderId);
+    
     try {
+      // Step 1: Exchange the authorization code for a refresh token
+      const res = await fetch('/api/zoho/marketing-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to exchange authorization code. Please generate a new code.');
+      }
+      
+      const refreshToken = data.refresh_token;
+
+      // Step 2: Save the refresh token to the database
       const { error } = await supabase
         .from('marketing_senders')
         .update({
-          refresh_token: tokenInput.trim(),
+          refresh_token: refreshToken,
           is_connected: true,
           updated_at: new Date().toISOString(),
         })
         .eq('id', senderId);
       if (error) throw error;
+      
       toast('Sender connected!', 'success');
       setShowTokenModal(null);
       setTokenInput('');
       await loadSenders();
     } catch (err) {
       reportError(err, { where: 'SendersPage.connect' });
-      toast('Failed to connect sender', 'error');
+      toast(err instanceof Error ? err.message : 'Failed to connect sender', 'error');
     } finally {
       setSaving(null);
     }
@@ -100,9 +118,9 @@ export const SendersPage = () => {
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
           {[
-            { step: '1', text: 'Go to Zoho API Console and create an OAuth token for the mailbox' },
-            { step: '2', text: 'Generate a refresh token for the ZohoMail.messages.CREATE scope' },
-            { step: '3', text: 'Paste the refresh token below — no passwords shared' },
+            { step: '1', text: 'Go to Zoho API Console and create a Self Client' },
+            { step: '2', text: 'Generate an authorization code for ZohoMail.messages.CREATE,ZohoMail.accounts.READ' },
+            { step: '3', text: 'Paste the authorization code below — we will securely exchange it' },
             { step: '4', text: 'Emails will be sent from that Zoho mailbox via OAuth' },
           ].map(({ step, text }) => (
             <div key={step} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
@@ -203,17 +221,17 @@ export const SendersPage = () => {
             </div>
 
             <p className="text-muted" style={{ marginBottom: '1rem', fontSize: '0.875rem' }}>
-              Paste the <strong>Zoho OAuth Refresh Token</strong> for{' '}
+              Paste the <strong>Zoho Authorization Code</strong> for{' '}
               <strong>{senders.find(s => s.id === showTokenModal)?.email}</strong>.
-              This token is generated from the Zoho API Console with the{' '}
+              This code is generated from the Zoho API Console with the{' '}
               <code style={{ background: 'hsl(var(--secondary))', padding: '0.1rem 0.3rem', borderRadius: 4, fontSize: '0.8rem' }}>
-                ZohoMail.messages.CREATE
+                ZohoMail.messages.CREATE,ZohoMail.accounts.READ
               </code>{' '}
-              scope. No password is stored.
+              scopes. It expires quickly, so paste it right after generating.
             </p>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label className="form-label">Zoho Refresh Token *</label>
+              <label className="form-label">Zoho Authorization Code *</label>
               <textarea
                 className="form-input"
                 style={{ fontFamily: 'monospace', fontSize: '0.75rem', height: 100, resize: 'none' }}
