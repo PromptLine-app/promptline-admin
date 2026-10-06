@@ -3,6 +3,7 @@ import { supabase } from '@/config/supabase';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useToast } from '@/components/common/Toast';
 import { reportError } from '@/lib/sentry';
+import { zohoRedirectUri } from '@/config/zoho';
 import type { MarketingSender } from '@/types/domain';
 import {
   FiMail, FiCheck, FiX, FiAlertCircle, FiRefreshCw, FiExternalLink,
@@ -46,7 +47,7 @@ export const SendersPage = () => {
       const res = await fetch('/api/zoho/marketing-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ code, redirect_uri: zohoRedirectUri() })
       });
       const data = await res.json();
       
@@ -118,8 +119,8 @@ export const SendersPage = () => {
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
           {[
-            { step: '1', text: 'Go to Zoho API Console and create a Self Client' },
-            { step: '2', text: 'Generate an authorization code for ZohoMail.messages.CREATE, ZohoMail.accounts.READ' },
+            { step: '1', text: 'Go to Zoho API Console and open the PromptLine OAuth client' },
+            { step: '2', text: 'Click Generate Code, enter scopes: ZohoMail.messages.CREATE, ZohoMail.accounts.READ' },
             { step: '3', text: 'Paste the authorization code below — we will securely exchange it' },
             { step: '4', text: 'Emails will be sent from that Zoho mailbox via OAuth' },
           ].map(({ step, text }) => (
