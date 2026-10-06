@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useToast } from '@/components/common/Toast';
 import { reportError } from '@/lib/sentry';
-import { zohoRedirectUri } from '@/config/zoho';
+import { zohoRedirectUri, beginZohoMarketingAuth } from '@/config/zoho';
 import type { MarketingSender } from '@/types/domain';
 import {
   FiMail, FiCheck, FiX, FiAlertCircle, FiRefreshCw, FiExternalLink,
@@ -11,11 +12,12 @@ import {
 
 export const SendersPage = () => {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [senders, setSenders] = useState<MarketingSender[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
-  const [showTokenModal, setShowTokenModal] = useState<string | null>(null);
-  const [tokenInput, setTokenInput] = useState('');
+  const processedRef = useRef(false);
 
   const loadSenders = useCallback(async () => {
     setLoading(true);
@@ -35,50 +37,61 @@ export const SendersPage = () => {
     }
   }, [toast]);
 
-  useEffect(() => { loadSenders(); }, [loadSenders]);
-
-  const handleConnectWithToken = async (senderId: string) => {
-    const code = tokenInput.trim();
-    if (!code) { toast('Please enter the Zoho authorization code', 'error'); return; }
+  const handleConnectWithCode = useCallback(async (senderId: string, authCode: string) => {
     setSaving(senderId);
-    
     try {
-      // Step 1: Exchange the authorization code for a refresh token
       const res = await fetch('/api/zoho/marketing-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, redirect_uri: zohoRedirectUri() })
+        body: JSON.stringify({ code: authCode, redirect_uri: zohoRedirectUri() })
       });
       const data = await res.json();
       
       if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to exchange authorization code. Please generate a new code.');
+        throw new Error(data.error || 'Failed to exchange authorization code. Please try again.');
       }
       
-      const refreshToken = data.refresh_token;
-
-      // Step 2: Save the refresh token to the database
       const { error } = await supabase
         .from('marketing_senders')
         .update({
-          refresh_token: refreshToken,
+          refresh_token: data.refresh_token,
           is_connected: true,
           updated_at: new Date().toISOString(),
         })
         .eq('id', senderId);
       if (error) throw error;
       
-      toast('Sender connected!', 'success');
-      setShowTokenModal(null);
-      setTokenInput('');
+      toast('Sender connected successfully!', 'success');
       await loadSenders();
     } catch (err) {
       reportError(err, { where: 'SendersPage.connect' });
       toast(err instanceof Error ? err.message : 'Failed to connect sender', 'error');
     } finally {
       setSaving(null);
+      // Clean up URL
+      navigate('/marketing/senders', { replace: true });
     }
-  };
+  }, [loadSenders, navigate, toast]);
+
+  useEffect(() => { loadSenders(); }, [loadSenders]);
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    const errorParam = searchParams.get('error');
+
+    if (errorParam) {
+      toast(`Zoho connection failed: ${errorParam}`, 'error');
+      navigate('/marketing/senders', { replace: true });
+      return;
+    }
+
+    if (code && state && state.startsWith('marketing:') && !processedRef.current) {
+      processedRef.current = true;
+      const senderId = state.replace('marketing:', '');
+      void handleConnectWithCode(senderId, code);
+    }
+  }, [searchParams, handleConnectWithCode, navigate, toast]);
 
   const handleDisconnect = async (senderId: string) => {
     setSaving(senderId);
@@ -119,10 +132,10 @@ export const SendersPage = () => {
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
           {[
-            { step: '1', text: 'Go to Zoho API Console and open the PromptLine OAuth client' },
-            { step: '2', text: 'Click Generate Code, enter scopes: ZohoMail.messages.CREATE, ZohoMail.accounts.READ' },
-            { step: '3', text: 'Paste the authorization code below — we will securely exchange it' },
-            { step: '4', text: 'Emails will be sent from that Zoho mailbox via OAuth' },
+            { step: '1', text: 'Click "Connect Zoho" on the mailbox you want to authorize' },
+            { step: '2', text: 'Sign in to the specific Zoho Mail account (e.g., ranjit@promptline.app)' },
+            { step: '3', text: 'Approve the requested scopes to allow sending emails' },
+            { step: '4', text: 'You will be redirected back, and the account will be connected!' },
           ].map(({ step, text }) => (
             <div key={step} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
               <div style={{
@@ -135,15 +148,6 @@ export const SendersPage = () => {
             </div>
           ))}
         </div>
-        <a
-          href={ZOHO_TOKEN_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn--secondary btn--sm"
-          style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-        >
-          <FiExternalLink /> Open Zoho API Console
-        </a>
       </div>
 
       {/* Sender cards */}
@@ -201,59 +205,15 @@ export const SendersPage = () => {
                   <button
                     className="btn btn--primary btn--sm"
                     style={{ width: '100%' }}
-                    onClick={() => { setShowTokenModal(sender.id); setTokenInput(''); }}
+                    onClick={() => beginZohoMarketingAuth(sender.id)}
+                    disabled={saving === sender.id}
                   >
-                    <FiMail style={{ marginRight: '0.3rem' }} /> Connect via Zoho Token
+                    <FiMail style={{ marginRight: '0.3rem' }} /> {saving === sender.id ? 'Connecting...' : 'Connect Zoho'}
                   </button>
                 </div>
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Token input modal */}
-      {showTokenModal && (
-        <div className="modal-backdrop" onClick={() => setShowTokenModal(null)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3>Connect Sender Account</h3>
-              <button className="icon-button" onClick={() => setShowTokenModal(null)}><FiX /></button>
-            </div>
-
-            <p className="text-muted" style={{ marginBottom: '1rem', fontSize: '0.875rem' }}>
-              Paste the <strong>Zoho Authorization Code</strong> for{' '}
-              <strong>{senders.find(s => s.id === showTokenModal)?.email}</strong>.
-              This code is generated from the Zoho API Console with the{' '}
-              <code style={{ background: 'hsl(var(--secondary))', padding: '0.1rem 0.3rem', borderRadius: 4, fontSize: '0.8rem' }}>
-                ZohoMail.messages.CREATE,ZohoMail.accounts.READ
-              </code>{' '}
-              scopes. It expires quickly, so paste it right after generating.
-            </p>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="form-label">Zoho Authorization Code *</label>
-              <textarea
-                className="form-input"
-                style={{ fontFamily: 'monospace', fontSize: '0.75rem', height: 100, resize: 'none' }}
-                placeholder="1000.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                value={tokenInput}
-                onChange={e => setTokenInput(e.target.value)}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn--secondary" onClick={() => setShowTokenModal(null)}>Cancel</button>
-              <button
-                className="btn btn--primary"
-                onClick={() => showTokenModal && handleConnectWithToken(showTokenModal)}
-                disabled={!tokenInput.trim() || saving === showTokenModal}
-              >
-                <FiCheck style={{ marginRight: '0.3rem' }} />
-                {saving === showTokenModal ? 'Connecting…' : 'Connect Sender'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
