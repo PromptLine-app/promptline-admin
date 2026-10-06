@@ -119,7 +119,7 @@ export const SendersPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
           {[
             { step: '1', text: 'Go to Zoho API Console and create a Self Client' },
-            { step: '2', text: 'Generate an authorization code for ZohoMail.messages.CREATE,ZohoMail.accounts.READ' },
+            { step: '2', text: 'Generate an authorization code for ZohoMail.messages.CREATE, ZohoMail.accounts.READ' },
             { step: '3', text: 'Paste the authorization code below — we will securely exchange it' },
             { step: '4', text: 'Emails will be sent from that Zoho mailbox via OAuth' },
           ].map(({ step, text }) => (
@@ -130,7 +130,7 @@ export const SendersPage = () => {
               }}>
                 {step}
               </div>
-              <p className="text-muted" style={{ fontSize: '0.85rem', lineHeight: 1.4 }}>{text}</p>
+              <p className="text-muted" style={{ fontSize: '0.85rem', lineHeight: 1.4, wordBreak: 'break-word' }}>{text}</p>
             </div>
           ))}
         </div>
