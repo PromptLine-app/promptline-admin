@@ -16,6 +16,7 @@ import { pathToFileURL } from 'node:url';
  */
 const devApiRoutes: Record<string, string> = {
   '/api/zoho/session': 'api/zoho/session.js',
+  '/api/zoho/marketing-token': 'api/zoho/marketing-token.js',
   '/api/admin/impersonate': 'api/admin/impersonate.js',
   '/api/admin/team': 'api/admin/team.js',
   '/api/admin/send-followup': 'api/admin/send-followup.js',
