@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock } from 'react-icons/fi';
+import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
 
@@ -23,19 +23,28 @@ export const CampaignDetailPage = () => {
   const [audienceFilter, setAudienceFilter] = useState('all'); // all, cold, warm, hot
   const [isSending, setIsSending] = useState(false);
 
+  // Sequence Builder State
+  const [sequenceSteps, setSequenceSteps] = useState<any[]>([]);
+  const [showStepModal, setShowStepModal] = useState(false);
+  const [newStepDelay, setNewStepDelay] = useState(3);
+  const [newStepTemplate, setNewStepTemplate] = useState('');
+
   useEffect(() => {
     if (!id) return;
     const fetchAnalytics = async () => {
       try {
-        const [campRes, enrollRes] = await Promise.all([
+        const [campRes, enrollRes, stepsRes] = await Promise.all([
           supabase.from('marketing_campaigns').select('*').eq('id', id).single(),
-          supabase.from('campaign_enrollments').select('status, current_step_number').eq('campaign_id', id)
+          supabase.from('campaign_enrollments').select('status, current_step_number').eq('campaign_id', id),
+          supabase.from('campaign_steps').select('*, email_templates(name)').eq('campaign_id', id).order('step_number', { ascending: true })
         ]);
 
         if (campRes.error) throw campRes.error;
         if (enrollRes.error) throw enrollRes.error;
+        if (stepsRes.error) throw stepsRes.error;
 
         setCampaign(campRes.data);
+        setSequenceSteps(stepsRes.data || []);
 
         // Process enrollments
         let active = 0, completed = 0, suppressed = 0;
@@ -180,6 +189,59 @@ export const CampaignDetailPage = () => {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sequence Builder UI (Phase 4) */}
+      {campaign.status === 'draft' && campaign.type === 'sequence' && (
+        <div className="page-card" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FiClock /> Sequence Workflow Builder
+            </h2>
+            <button className="btn btn--primary" onClick={() => setShowStepModal(true)}>
+              + Add Step
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative' }}>
+            {sequenceSteps.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', background: 'hsl(var(--secondary))', borderRadius: 8, border: '1px dashed hsl(var(--border))' }}>
+                <p className="text-muted">No steps added yet. Add an email step to start the sequence.</p>
+              </div>
+            ) : (
+              sequenceSteps.map((step, index) => (
+                <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ width: '100%', padding: '1rem', background: 'hsl(var(--secondary))', borderRadius: 8, border: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h4 style={{ fontWeight: 600 }}>Step {step.step_number}: Email Send</h4>
+                      <p className="text-muted" style={{ fontSize: '0.875rem' }}>Template: {step.email_templates?.name || 'Unknown Template'}</p>
+                    </div>
+                  </div>
+                  {index < sequenceSteps.length - 1 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
+                      <span style={{ fontSize: '0.75rem', background: 'hsl(var(--background))', color: 'hsl(var(--muted-foreground))', padding: '0.2rem 0.5rem', borderRadius: 999, border: '1px solid hsl(var(--border))' }}>
+                        Wait {sequenceSteps[index+1].delay_days} days
+                      </span>
+                      <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          
+          {sequenceSteps.length > 0 && (
+            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                className="btn btn--primary" 
+                onClick={() => alert("The Sequence Engine is currently being built! This will lock the sequence and begin enrolling contacts.")}
+              >
+                Activate Sequence
+              </button>
             </div>
           )}
         </div>
