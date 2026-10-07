@@ -62,18 +62,26 @@ export const ContactsPage = () => {
         .not('work_email', 'is', null);
       if (error) throw error;
 
-      const upserts = (leads ?? []).map((l: any) => ({
-        full_name: l.full_name ?? 'Unknown',
-        email: l.work_email,
-        phone: l.phone ?? null,
-        company: l.business_name ?? null,
-        lead_source: 'calculator_lead',
-        source_id: l.id,
-        industry: l.industry ?? null,
-        monthly_loss: l.monthly_loss ?? null,
-        status: 'active',
-        tags: ['calculator'],
-      }));
+      const seenEmails = new Set<string>();
+      const upserts: any[] = [];
+      for (const l of leads ?? []) {
+        const cleanEmail = (l.work_email ?? '').trim().toLowerCase();
+        if (!cleanEmail || seenEmails.has(cleanEmail)) continue;
+        seenEmails.add(cleanEmail);
+        upserts.push({
+          full_name: l.full_name ?? 'Unknown',
+          email: cleanEmail,
+          phone: l.phone ?? null,
+          company: l.business_name ?? null,
+          lead_source: 'calculator_lead',
+          source_id: l.id,
+          industry: l.industry ?? null,
+          monthly_loss: l.monthly_loss ?? null,
+          status: 'active',
+          engagement_state: 'warm',
+          tags: ['calculator'],
+        });
+      }
 
       if (upserts.length === 0) { toast('No calculator leads with email found', 'error'); return; }
 
@@ -101,16 +109,24 @@ export const ContactsPage = () => {
         .not('email', 'is', null);
       if (error) throw error;
 
-      const upserts = (requests ?? []).map((r: any) => ({
-        full_name: r.name ?? 'Unknown',
-        email: r.email,
-        phone: r.phone ?? null,
-        company: r.company ?? null,
-        lead_source: 'contact_request',
-        source_id: r.id,
-        status: 'active',
-        tags: ['contact-request'],
-      }));
+      const seenEmails = new Set<string>();
+      const upserts: any[] = [];
+      for (const r of requests ?? []) {
+        const cleanEmail = (r.email ?? '').trim().toLowerCase();
+        if (!cleanEmail || seenEmails.has(cleanEmail)) continue;
+        seenEmails.add(cleanEmail);
+        upserts.push({
+          full_name: r.name ?? 'Unknown',
+          email: cleanEmail,
+          phone: r.phone ?? null,
+          company: r.company ?? null,
+          lead_source: 'contact_request',
+          source_id: r.id,
+          status: 'active',
+          engagement_state: 'warm',
+          tags: ['contact-request'],
+        });
+      }
 
       if (upserts.length === 0) { toast('No contact requests with email found', 'error'); return; }
 

@@ -46,7 +46,16 @@ export const CampaignDetailPage = () => {
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const body = await error.context.json();
+            if (body?.error) msg = body.error + (body.details ? `: ${body.details}` : '');
+          }
+        } catch (_) {}
+        throw new Error(msg);
+      }
       
       alert(data?.message || "Broadcast launched successfully!");
       // Reload page to reflect new status
