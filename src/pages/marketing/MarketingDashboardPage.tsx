@@ -45,7 +45,7 @@ export const MarketingDashboardPage = () => {
           supabase.from('email_sends').select('*', { count: 'exact', head: true }).eq('status', 'sent'),
           supabase.from('marketing_senders').select('*').eq('is_active', true),
           supabase.from('email_sends')
-            .select('id, recipient_email, subject, status, sent_at, sender_id, marketing_senders(display_name, email)')
+            .select('id, recipient_email, subject, status, sent_at, opened_at, clicked_at, sender_id, marketing_senders(display_name, email)')
             .eq('status', 'sent')
             .order('sent_at', { ascending: false })
             .limit(8),
@@ -400,27 +400,54 @@ export const MarketingDashboardPage = () => {
       {/* Recent Sends */}
       {recentSends.length > 0 && (
         <div className="page-card" style={{ padding: '1.5rem', marginTop: '1.5rem' }}>
-          <h3 style={{ marginBottom: '1rem', fontWeight: 600 }}>Recent Sends</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <h3 style={{ marginBottom: '1rem', fontWeight: 600 }}>Recent Sends & Tracking History</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {recentSends.map((send: any) => (
               <div
                 key={send.id}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '0.75rem', borderRadius: 8, background: 'hsl(var(--secondary))',
+                  padding: '1rem', borderRadius: 8, background: 'hsl(var(--secondary))',
+                  border: '1px solid hsl(var(--border))'
                 }}
               >
-                <div>
-                  <p style={{ fontWeight: 500, fontSize: '0.875rem', marginBottom: '0.15rem' }}>
+                <div style={{ flex: 2 }}>
+                  <p style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.2rem' }}>
                     {send.recipient_email}
                   </p>
-                  <p className="text-muted" style={{ fontSize: '0.75rem' }}>
-                    {send.subject} · via {(send.marketing_senders as any)?.display_name}
+                  <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+                    Subject: {send.subject}
+                  </p>
+                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                    Sent: {formatDate(send.sent_at)} via {(send.marketing_senders as any)?.display_name}
                   </p>
                 </div>
-                <p className="text-muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                  {formatDate(send.sent_at)}
-                </p>
+                
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
+                  {send.opened_at ? (
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(142 71% 45%)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(142 71% 45%)' }}></span>
+                      Opened ({formatDate(send.opened_at)})
+                    </span>
+                  ) : (
+                    <span className="text-muted" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--muted-foreground))' }}></span>
+                      Not Opened
+                    </span>
+                  )}
+
+                  {send.clicked_at ? (
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(260 80% 60%)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(260 80% 60%)' }}></span>
+                      Clicked ({formatDate(send.clicked_at)})
+                    </span>
+                  ) : (
+                    <span className="text-muted" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--muted-foreground))' }}></span>
+                      Not Clicked
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
