@@ -22,6 +22,7 @@ export const CampaignDetailPage = () => {
   const [selectedSender, setSelectedSender] = useState('');
   const [audienceFilter, setAudienceFilter] = useState('all'); // all, cold, warm, hot
   const [isSending, setIsSending] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
 
   // Sequence Builder State
   const [sequenceSteps, setSequenceSteps] = useState<any[]>([]);
@@ -29,22 +30,54 @@ export const CampaignDetailPage = () => {
   const [newStepDelay, setNewStepDelay] = useState(3);
   const [newStepTemplate, setNewStepTemplate] = useState('');
 
+  const handleLaunchBroadcast = async () => {
+    if (!selectedTemplate) {
+      alert("Please select a template first.");
+      return;
+    }
+    
+    setIsSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('marketing-launch-campaign', {
+        body: {
+          campaign_id: id,
+          audience_filter: audienceFilter,
+          template_id: selectedTemplate
+        }
+      });
+      
+      if (error) throw error;
+      
+      alert(data?.message || "Broadcast launched successfully!");
+      // Reload page to reflect new status
+      window.location.reload();
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.launch' });
+      alert(`Failed to launch broadcast: ${err.message}`);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
     const fetchAnalytics = async () => {
       try {
-        const [campRes, enrollRes, stepsRes] = await Promise.all([
+        const [campRes, enrollRes, stepsRes, tmplRes] = await Promise.all([
           supabase.from('marketing_campaigns').select('*').eq('id', id).single(),
           supabase.from('campaign_enrollments').select('status, current_step_number').eq('campaign_id', id),
-          supabase.from('campaign_steps').select('*, email_templates(name)').eq('campaign_id', id).order('step_number', { ascending: true })
+          supabase.from('campaign_steps').select('*, email_templates(name)').eq('campaign_id', id).order('step_number', { ascending: true }),
+          supabase.from('email_templates').select('id, name').eq('is_active', true).order('name')
         ]);
 
         if (campRes.error) throw campRes.error;
         if (enrollRes.error) throw enrollRes.error;
         if (stepsRes.error) throw stepsRes.error;
+        if (tmplRes.error) throw tmplRes.error;
 
         setCampaign(campRes.data);
         setSequenceSteps(stepsRes.data || []);
+        setTemplates(tmplRes.data || []);
 
         // Process enrollments
         let active = 0, completed = 0, suppressed = 0;
@@ -271,9 +304,9 @@ export const CampaignDetailPage = () => {
               <label className="form-label">Email Template</label>
               <select className="form-input" value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
                 <option value="">— Select a template —</option>
-                <option value="tmp1">ROI Calculator Follow-up</option>
-                <option value="tmp2">AI Receptionist Demo Invite</option>
-                <option value="tmp3">General Outreach</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -287,9 +320,10 @@ export const CampaignDetailPage = () => {
             </div>
             <button 
               className="btn btn--primary" 
-              onClick={() => alert("The Bulk Blast engine is currently being built! This will process the audience and send the emails in the background.")}
+              onClick={handleLaunchBroadcast}
+              disabled={isSending || !selectedTemplate}
             >
-              <FiSend style={{ marginRight: '0.5rem' }} /> Launch Broadcast
+              <FiSend style={{ marginRight: '0.5rem' }} /> {isSending ? 'Launching...' : 'Launch Broadcast'}
             </button>
           </div>
         </div>
