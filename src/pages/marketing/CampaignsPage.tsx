@@ -55,7 +55,7 @@ export const CampaignsPage = () => {
           <button className="btn btn--secondary" onClick={() => navigate('/marketing/sequences')}>
             <FiFileText style={{ marginRight: '0.5rem' }} /> Manage Sequences
           </button>
-          <button className="btn btn--primary" onClick={() => navigate('/marketing/send')}>
+          <button className="btn btn--primary" onClick={() => alert('Campaign builder is under construction (Phase 4). For now, use the Ad-Hoc Email tool!')}>
             <FiPlus style={{ marginRight: '0.5rem' }} /> New Campaign
           </button>
         </div>
@@ -82,7 +82,7 @@ export const CampaignsPage = () => {
             <p className="text-muted" style={{ marginBottom: '1.5rem', maxWidth: 400, margin: '0 auto 1.5rem' }}>
               Create your first email broadcast or automated sequence to start engaging your audience.
             </p>
-            <button className="btn btn--primary" onClick={() => navigate('/marketing/send')}>
+            <button className="btn btn--primary" onClick={() => alert('Campaign builder is under construction (Phase 4). For now, use the Ad-Hoc Email tool!')}>
               <FiPlus style={{ marginRight: '0.5rem' }} /> Create Campaign
             </button>
           </div>

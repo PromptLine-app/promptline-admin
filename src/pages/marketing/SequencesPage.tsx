@@ -11,7 +11,7 @@ export const SequencesPage = () => {
           <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>Sequences</h1>
           <p className="text-muted">Build automated multi-step email workflows</p>
         </div>
-        <button className="btn btn--primary" onClick={() => navigate('/marketing/send')}>
+        <button className="btn btn--primary" onClick={() => alert('Sequence builder is under construction (Phase 4). For now, use the Ad-Hoc Email tool!')}>
           <FiPlus style={{ marginRight: '0.5rem' }} /> New Sequence
         </button>
       </div>
