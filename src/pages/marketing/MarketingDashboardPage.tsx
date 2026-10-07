@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
 import { FiMail, FiUsers, FiFileText, FiSend, FiTrendingUp, FiAlertCircle } from 'react-icons/fi';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Legend, AreaChart, Area
+} from 'recharts';
 import { reportError } from '@/lib/sentry';
 import type { MarketingSender } from '@/types/domain';
 
@@ -14,6 +18,9 @@ type DashboardStats = {
   totalSenders: number;
   openRate: number;
   clickRate: number;
+  timelineData: any[];
+  templateData: any[];
+  contactGrowthData: any[];
 };
 
 export const MarketingDashboardPage = () => {
@@ -55,24 +62,76 @@ export const MarketingDashboardPage = () => {
           .gte('sent_at', startOfMonth.toISOString());
 
         // Calculate Open/Click Rates
-        const { data: sendsData } = await supabase
-          .from('email_sends')
-          .select('opened_at, clicked_at')
-          .eq('status', 'sent');
+        // Fetch detailed data for charts
+        const [
+          { data: sendsData },
+          { data: contactsData }
+        ] = await Promise.all([
+          supabase
+            .from('email_sends')
+            .select('id, sent_at, opened_at, clicked_at, email_templates(name)')
+            .eq('status', 'sent')
+            .gte('sent_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+          supabase
+            .from('email_contacts')
+            .select('created_at')
+            .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        ]);
         
         let opens = 0;
         let clicks = 0;
         const total = totalSends ?? 0;
         
-        if (sendsData && total > 0) {
+        const timelineMap: Record<string, { date: string; sends: number; opens: number; clicks: number }> = {};
+        const templateMap: Record<string, { name: string; sends: number; opens: number }> = {};
+        const contactMap: Record<string, { date: string; newContacts: number }> = {};
+
+        // Init last 30 days
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dateStr = d.toISOString().split('T')[0];
+          timelineMap[dateStr] = { date: dateStr, sends: 0, opens: 0, clicks: 0 };
+          contactMap[dateStr] = { date: dateStr, newContacts: 0 };
+        }
+
+        if (sendsData) {
           sendsData.forEach(s => {
             if (s.opened_at) opens++;
             if (s.clicked_at) clicks++;
+
+            // Timeline
+            const dateStr = s.sent_at.split('T')[0];
+            if (timelineMap[dateStr]) {
+              timelineMap[dateStr].sends++;
+              if (s.opened_at) timelineMap[dateStr].opens++;
+              if (s.clicked_at) timelineMap[dateStr].clicks++;
+            }
+
+            // Templates
+            const tName = (s.email_templates as any)?.name || 'Custom Email';
+            if (!templateMap[tName]) templateMap[tName] = { name: tName, sends: 0, opens: 0 };
+            templateMap[tName].sends++;
+            if (s.opened_at) templateMap[tName].opens++;
           });
         }
         
+        if (contactsData) {
+          contactsData.forEach(c => {
+            const dateStr = c.created_at.split('T')[0];
+            if (contactMap[dateStr]) contactMap[dateStr].newContacts++;
+          });
+        }
+
         const openRate = total > 0 ? Math.round((opens / total) * 100) : 0;
         const clickRate = total > 0 ? Math.round((clicks / total) * 100) : 0;
+
+        const timelineData = Object.values(timelineMap);
+        const contactGrowthData = Object.values(contactMap);
+        const templateData = Object.values(templateMap)
+          .map(t => ({ ...t, openRate: Math.round((t.opens / t.sends) * 100) }))
+          .sort((a, b) => b.sends - a.sends)
+          .slice(0, 5);
 
         setSenders((senderData ?? []) as MarketingSender[]);
         setRecentSends(recent ?? []);
@@ -85,6 +144,9 @@ export const MarketingDashboardPage = () => {
           totalSenders: (senderData ?? []).length,
           openRate,
           clickRate,
+          timelineData,
+          templateData,
+          contactGrowthData,
         });
       } catch (err) {
         reportError(err, { where: 'MarketingDashboardPage' });
@@ -246,6 +308,94 @@ export const MarketingDashboardPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Analytics Charts (Phase 2 & 3) */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
+          
+          {/* Engagement Over Time */}
+          <div className="page-card" style={{ padding: '1.5rem' }}>
+            <h3 style={{ marginBottom: '1rem', fontWeight: 600 }}>Engagement (Last 30 Days)</h3>
+            <div style={{ width: '100%', height: 300 }}>
+              <ResponsiveContainer>
+                <LineChart data={stats.timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="date" 
+                    tickFormatter={(val) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={12} 
+                    tickMargin={10} 
+                  />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{ background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                    labelFormatter={(val) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Line type="monotone" dataKey="sends" name="Sent" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="opens" name="Opened" stroke="hsl(142 71% 45%)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="clicks" name="Clicked" stroke="hsl(38 92% 50%)" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {/* Top Performing Templates */}
+            <div className="page-card" style={{ padding: '1.5rem', flex: 1 }}>
+              <h3 style={{ marginBottom: '1rem', fontWeight: 600 }}>Top Templates (By Open Rate)</h3>
+              <div style={{ width: '100%', height: 200 }}>
+                <ResponsiveContainer>
+                  <BarChart data={stats.templateData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" hide />
+                    <Tooltip 
+                      cursor={{ fill: 'hsl(var(--secondary))' }}
+                      contentStyle={{ background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                      formatter={(value: number) => [`${value}%`, 'Open Rate']}
+                    />
+                    <Bar dataKey="openRate" fill="hsl(142 71% 45%)" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {stats.templateData.map(t => (
+                  <div key={t.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                    <span style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '75%' }}>
+                      {t.name}
+                    </span>
+                    <span className="text-muted">{t.openRate}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Contact Growth */}
+            <div className="page-card" style={{ padding: '1.5rem', flex: 1 }}>
+              <h3 style={{ marginBottom: '1rem', fontWeight: 600 }}>Contact Growth</h3>
+              <div style={{ width: '100%', height: 100 }}>
+                <ResponsiveContainer>
+                  <AreaChart data={stats.contactGrowthData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorContacts" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <Tooltip 
+                      contentStyle={{ background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                      labelFormatter={(val) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    />
+                    <Area type="monotone" dataKey="newContacts" name="New Contacts" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorContacts)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* Recent Sends */}
       {recentSends.length > 0 && (
