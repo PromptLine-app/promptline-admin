@@ -12,6 +12,8 @@ type DashboardStats = {
   emailsSentThisMonth: number;
   connectedSenders: number;
   totalSenders: number;
+  openRate: number;
+  clickRate: number;
 };
 
 export const MarketingDashboardPage = () => {
@@ -52,6 +54,26 @@ export const MarketingDashboardPage = () => {
           .eq('status', 'sent')
           .gte('sent_at', startOfMonth.toISOString());
 
+        // Calculate Open/Click Rates
+        const { data: sendsData } = await supabase
+          .from('email_sends')
+          .select('opened_at, clicked_at')
+          .eq('status', 'sent');
+        
+        let opens = 0;
+        let clicks = 0;
+        const total = totalSends ?? 0;
+        
+        if (sendsData && total > 0) {
+          sendsData.forEach(s => {
+            if (s.opened_at) opens++;
+            if (s.clicked_at) clicks++;
+          });
+        }
+        
+        const openRate = total > 0 ? Math.round((opens / total) * 100) : 0;
+        const clickRate = total > 0 ? Math.round((clicks / total) * 100) : 0;
+
         setSenders((senderData ?? []) as MarketingSender[]);
         setRecentSends(recent ?? []);
         setStats({
@@ -61,6 +83,8 @@ export const MarketingDashboardPage = () => {
           emailsSentThisMonth: monthSends ?? 0,
           connectedSenders: (senderData ?? []).filter((s: any) => s.is_connected).length,
           totalSenders: (senderData ?? []).length,
+          openRate,
+          clickRate,
         });
       } catch (err) {
         reportError(err, { where: 'MarketingDashboardPage' });
@@ -77,9 +101,9 @@ export const MarketingDashboardPage = () => {
   const kpis = stats
     ? [
         { label: 'Total Contacts', value: stats.totalContacts.toLocaleString(), icon: <FiUsers />, color: 'hsl(var(--primary))' },
-        { label: 'Active Templates', value: stats.totalTemplates.toLocaleString(), icon: <FiFileText />, color: 'hsl(142 71% 45%)' },
-        { label: 'Emails Sent (Total)', value: stats.emailsSent.toLocaleString(), icon: <FiMail />, color: 'hsl(38 92% 50%)' },
-        { label: 'Sent This Month', value: stats.emailsSentThisMonth.toLocaleString(), icon: <FiTrendingUp />, color: 'hsl(260 80% 60%)' },
+        { label: 'Emails Sent', value: stats.emailsSent.toLocaleString(), icon: <FiMail />, color: 'hsl(38 92% 50%)' },
+        { label: 'Avg Open Rate', value: `${stats.openRate}%`, icon: <FiTrendingUp />, color: 'hsl(142 71% 45%)' },
+        { label: 'Avg Click Rate', value: `${stats.clickRate}%`, icon: <FiSend />, color: 'hsl(260 80% 60%)' },
       ]
     : [];
 
