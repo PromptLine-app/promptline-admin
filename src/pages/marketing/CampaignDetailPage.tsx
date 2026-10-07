@@ -17,6 +17,12 @@ export const CampaignDetailPage = () => {
   });
   const [loading, setLoading] = useState(true);
 
+  // Broadcast Setup State
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [selectedSender, setSelectedSender] = useState('');
+  const [audienceFilter, setAudienceFilter] = useState('all'); // all, cold, warm, hot
+  const [isSending, setIsSending] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     const fetchAnalytics = async () => {
@@ -151,7 +157,7 @@ export const CampaignDetailPage = () => {
       </div>
 
       {/* Analytics Main Section */}
-      {campaign.type === 'sequence' && (
+      {campaign.status !== 'draft' && campaign.type === 'sequence' && (
         <div className="page-card" style={{ padding: '1.5rem' }}>
           <h3 style={{ marginBottom: '1.5rem', fontWeight: 600 }}>Audience Progress (Active)</h3>
           {Object.keys(stats.stepDistribution).length === 0 ? (
@@ -176,6 +182,54 @@ export const CampaignDetailPage = () => {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Broadcast Setup UI (Phase 4) */}
+      {campaign.status === 'draft' && campaign.type === 'broadcast' && (
+        <div className="page-card" style={{ padding: '2rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FiSend /> Broadcast Setup
+          </h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
+            <div>
+              <label className="form-label">Target Audience</label>
+              <select className="form-input" value={audienceFilter} onChange={e => setAudienceFilter(e.target.value)}>
+                <option value="all">All Active Contacts</option>
+                <option value="warm">Warm Leads Only</option>
+                <option value="cold">Cold Leads Only</option>
+              </select>
+              <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                Filter which contacts will receive this broadcast.
+              </p>
+            </div>
+
+            <div>
+              <label className="form-label">Email Template</label>
+              <select className="form-input" value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
+                <option value="">— Select a template —</option>
+                <option value="tmp1">ROI Calculator Follow-up</option>
+                <option value="tmp2">AI Receptionist Demo Invite</option>
+                <option value="tmp3">General Outreach</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ padding: '1.5rem', background: 'hsl(var(--secondary))', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <h4 style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Ready to Blast?</h4>
+              <p className="text-muted" style={{ fontSize: '0.875rem' }}>
+                This will queue the broadcast for your selected audience.
+              </p>
+            </div>
+            <button 
+              className="btn btn--primary" 
+              onClick={() => alert("The Bulk Blast engine is currently being built! This will process the audience and send the emails in the background.")}
+            >
+              <FiSend style={{ marginRight: '0.5rem' }} /> Launch Broadcast
+            </button>
+          </div>
         </div>
       )}
     </div>

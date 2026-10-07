@@ -9,6 +9,30 @@ export const CampaignsPage = () => {
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const handleCreateCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCampaignName.trim()) return;
+    setCreating(true);
+    try {
+      const { data, error } = await supabase
+        .from('marketing_campaigns')
+        .insert({ name: newCampaignName, type: 'broadcast', status: 'draft' })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      if (data) navigate(`/marketing/campaigns/${data.id}`);
+    } catch (err) {
+      reportError(err, { where: 'CampaignsPage.create' });
+      alert('Failed to create campaign');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     const fetchCampaigns = async () => {
@@ -55,7 +79,7 @@ export const CampaignsPage = () => {
           <button className="btn btn--secondary" onClick={() => navigate('/marketing/sequences')}>
             <FiFileText style={{ marginRight: '0.5rem' }} /> Manage Sequences
           </button>
-          <button className="btn btn--primary" onClick={() => alert('Campaign builder is under construction (Phase 4). For now, use the Ad-Hoc Email tool!')}>
+          <button className="btn btn--primary" onClick={() => setIsModalOpen(true)}>
             <FiPlus style={{ marginRight: '0.5rem' }} /> New Campaign
           </button>
         </div>
@@ -82,7 +106,7 @@ export const CampaignsPage = () => {
             <p className="text-muted" style={{ marginBottom: '1.5rem', maxWidth: 400, margin: '0 auto 1.5rem' }}>
               Create your first email broadcast or automated sequence to start engaging your audience.
             </p>
-            <button className="btn btn--primary" onClick={() => alert('Campaign builder is under construction (Phase 4). For now, use the Ad-Hoc Email tool!')}>
+            <button className="btn btn--primary" onClick={() => setIsModalOpen(true)}>
               <FiPlus style={{ marginRight: '0.5rem' }} /> Create Campaign
             </button>
           </div>
@@ -129,6 +153,34 @@ export const CampaignsPage = () => {
           </table>
         )}
       </div>
+
+      {/* New Campaign Modal */}
+      {isModalOpen && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="page-card" style={{ width: 400, padding: '1.5rem', background: 'hsl(var(--background))' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>Create New Campaign</h2>
+            <form onSubmit={handleCreateCampaign}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Campaign Name</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="e.g., Q3 Customer Outreach" 
+                  value={newCampaignName}
+                  onChange={e => setNewCampaignName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn--secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn btn--primary" disabled={creating || !newCampaignName.trim()}>
+                  {creating ? 'Creating...' : 'Create Campaign'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
