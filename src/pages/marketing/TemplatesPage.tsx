@@ -1,5 +1,6 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/config/supabase';
+import { adminApi } from '@/lib/adminApi';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useToast } from '@/components/common/Toast';
 import { reportError } from '@/lib/sentry';
@@ -97,20 +98,25 @@ export const TemplatesPage = () => {
         updated_at: new Date().toISOString(),
       };
 
-      let error;
-      if (selected.id) {
-        ({ error } = await supabase.from('email_templates').update(payload).eq('id', selected.id));
-      } else {
-        ({ error } = await supabase.from('email_templates').insert({ ...payload, is_starter: false }));
+      try {
+        await adminApi('/api/admin/templates', 'POST', { ...payload, id: selected.id });
+      } catch (apiErr) {
+        // Fallback to direct supabase client
+        let error;
+        if (selected.id) {
+          ({ error } = await supabase.from('email_templates').update(payload).eq('id', selected.id));
+        } else {
+          ({ error } = await supabase.from('email_templates').insert({ ...payload, is_starter: false }));
+        }
+        if (error) throw error;
       }
-      if (error) throw error;
 
       toast('Template saved!', 'success');
       setMode('list');
       await loadTemplates();
-    } catch (err) {
+    } catch (err: any) {
       reportError(err, { where: 'TemplatesPage.save' });
-      toast('Failed to save template', 'error');
+      toast(err?.message || 'Failed to save template', 'error');
     } finally {
       setSaving(false);
     }
@@ -118,14 +124,18 @@ export const TemplatesPage = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from('email_templates').update({ is_active: false }).eq('id', id);
-      if (error) throw error;
+      try {
+        await adminApi('/api/admin/templates', 'DELETE', { id });
+      } catch (apiErr) {
+        const { error } = await supabase.from('email_templates').update({ is_active: false }).eq('id', id);
+        if (error) throw error;
+      }
       toast('Template archived', 'success');
       setDeleteId(null);
       await loadTemplates();
-    } catch (err) {
+    } catch (err: any) {
       reportError(err, { where: 'TemplatesPage.delete' });
-      toast('Failed to archive template', 'error');
+      toast(err?.message || 'Failed to archive template', 'error');
     }
   };
 

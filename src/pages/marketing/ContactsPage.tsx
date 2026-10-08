@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/config/supabase';
+import { adminApi } from '@/lib/adminApi';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { useToast } from '@/components/common/Toast';
@@ -85,16 +86,20 @@ export const ContactsPage = () => {
 
       if (upserts.length === 0) { toast('No calculator leads with email found', 'error'); return; }
 
-      const { error: upsertErr } = await supabase
-        .from('email_contacts')
-        .upsert(upserts, { onConflict: 'email,lead_source' });
-      if (upsertErr) throw upsertErr;
+      try {
+        await adminApi('/api/admin/contacts', 'POST', { contacts: upserts });
+      } catch (apiErr) {
+        const { error: upsertErr } = await supabase
+          .from('email_contacts')
+          .upsert(upserts, { onConflict: 'email,lead_source' });
+        if (upsertErr) throw upsertErr;
+      }
 
       toast(`Synced ${upserts.length} calculator leads!`, 'success');
       await loadContacts();
-    } catch (err) {
+    } catch (err: any) {
       reportError(err, { where: 'ContactsPage.syncCalculator' });
-      toast('Failed to sync calculator leads', 'error');
+      toast(err?.message || 'Failed to sync calculator leads', 'error');
     } finally {
       setSyncing(false);
     }
@@ -130,16 +135,20 @@ export const ContactsPage = () => {
 
       if (upserts.length === 0) { toast('No contact requests with email found', 'error'); return; }
 
-      const { error: upsertErr } = await supabase
-        .from('email_contacts')
-        .upsert(upserts, { onConflict: 'email,lead_source' });
-      if (upsertErr) throw upsertErr;
+      try {
+        await adminApi('/api/admin/contacts', 'POST', { contacts: upserts });
+      } catch (apiErr) {
+        const { error: upsertErr } = await supabase
+          .from('email_contacts')
+          .upsert(upserts, { onConflict: 'email,lead_source' });
+        if (upsertErr) throw upsertErr;
+      }
 
       toast(`Synced ${upserts.length} contact requests!`, 'success');
       await loadContacts();
-    } catch (err) {
+    } catch (err: any) {
       reportError(err, { where: 'ContactsPage.syncContacts' });
-      toast('Failed to sync contact requests', 'error');
+      toast(err?.message || 'Failed to sync contact requests', 'error');
     } finally {
       setSyncing(false);
     }
