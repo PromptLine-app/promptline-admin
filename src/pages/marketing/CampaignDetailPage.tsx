@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend } from 'react-icons/fi';
+import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2 } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
 
@@ -29,6 +29,57 @@ export const CampaignDetailPage = () => {
   const [showStepModal, setShowStepModal] = useState(false);
   const [newStepDelay, setNewStepDelay] = useState(3);
   const [newStepTemplate, setNewStepTemplate] = useState('');
+  const [addingStep, setAddingStep] = useState(false);
+
+  const handleAddStep = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStepTemplate) {
+      alert("Please select an email template.");
+      return;
+    }
+    const tmpl = templates.find(t => t.id === newStepTemplate);
+    if (!tmpl) return;
+
+    setAddingStep(true);
+    try {
+      const nextStepNum = sequenceSteps.length + 1;
+      const { data, error } = await supabase
+        .from('campaign_steps')
+        .insert({
+          campaign_id: id,
+          step_number: nextStepNum,
+          template_id: tmpl.id,
+          subject: tmpl.subject || tmpl.name,
+          body_html: tmpl.body_html || '<p></p>',
+          wait_days: sequenceSteps.length === 0 ? 0 : Number(newStepDelay),
+        })
+        .select('*, email_templates(name)')
+        .single();
+
+      if (error) throw error;
+      setSequenceSteps([...sequenceSteps, data]);
+      setShowStepModal(false);
+      setNewStepTemplate('');
+      setNewStepDelay(3);
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.addStep' });
+      alert(`Failed to add step: ${err.message}`);
+    } finally {
+      setAddingStep(false);
+    }
+  };
+
+  const handleDeleteStep = async (stepId: string) => {
+    if (!confirm("Are you sure you want to remove this step?")) return;
+    try {
+      const { error } = await supabase.from('campaign_steps').delete().eq('id', stepId);
+      if (error) throw error;
+      setSequenceSteps(sequenceSteps.filter(s => s.id !== stepId));
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.deleteStep' });
+      alert(`Failed to delete step: ${err.message}`);
+    }
+  };
 
   const handleLaunchBroadcast = async () => {
     if (!selectedTemplate) {
@@ -76,7 +127,7 @@ export const CampaignDetailPage = () => {
           supabase.from('marketing_campaigns').select('*').eq('id', id).single(),
           supabase.from('campaign_enrollments').select('status, current_step_number').eq('campaign_id', id),
           supabase.from('campaign_steps').select('*, email_templates(name)').eq('campaign_id', id).order('step_number', { ascending: true }),
-          supabase.from('email_templates').select('id, name').eq('is_active', true).order('name')
+          supabase.from('email_templates').select('id, name, subject, body_html').eq('is_active', true).order('name')
         ]);
 
         if (campRes.error) throw campRes.error;
@@ -261,12 +312,20 @@ export const CampaignDetailPage = () => {
                       <h4 style={{ fontWeight: 600 }}>Step {step.step_number}: Email Send</h4>
                       <p className="text-muted" style={{ fontSize: '0.875rem' }}>Template: {step.email_templates?.name || 'Unknown Template'}</p>
                     </div>
+                    <button 
+                      type="button" 
+                      className="btn btn--secondary" 
+                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', color: 'hsl(var(--destructive))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      onClick={() => handleDeleteStep(step.id)}
+                    >
+                      <FiTrash2 /> Remove
+                    </button>
                   </div>
                   {index < sequenceSteps.length - 1 && (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
                       <span style={{ fontSize: '0.75rem', background: 'hsl(var(--background))', color: 'hsl(var(--muted-foreground))', padding: '0.2rem 0.5rem', borderRadius: 999, border: '1px solid hsl(var(--border))' }}>
-                        Wait {sequenceSteps[index+1].delay_days} days
+                        Wait {sequenceSteps[index+1].wait_days ?? sequenceSteps[index+1].delay_days ?? 3} days
                       </span>
                       <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
                     </div>
@@ -334,6 +393,65 @@ export const CampaignDetailPage = () => {
             >
               <FiSend style={{ marginRight: '0.5rem' }} /> {isSending ? 'Launching...' : 'Launch Broadcast'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Step Modal */}
+      {showStepModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="page-card" style={{ width: 440, padding: '1.5rem', background: 'hsl(var(--background))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Add Sequence Step</h2>
+              <button 
+                type="button" 
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} 
+                onClick={() => setShowStepModal(false)}
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleAddStep}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Step {sequenceSteps.length + 1} — Email Template</label>
+                <select 
+                  className="form-input" 
+                  value={newStepTemplate} 
+                  onChange={e => setNewStepTemplate(e.target.value)}
+                  required
+                >
+                  <option value="">— Select a template —</option>
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {sequenceSteps.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Delay After Previous Step (Days)</label>
+                  <input 
+                    type="number" 
+                    min={1} 
+                    max={90} 
+                    className="form-input" 
+                    value={newStepDelay}
+                    onChange={e => setNewStepDelay(Number(e.target.value))}
+                    required
+                  />
+                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                    Days to wait before sending this email after step {sequenceSteps.length}.
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn--secondary" onClick={() => setShowStepModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn--primary" disabled={addingStep || !newStepTemplate}>
+                  {addingStep ? 'Adding...' : 'Add Step'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
