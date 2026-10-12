@@ -110,21 +110,21 @@ export const ContactsPage = () => {
     try {
       const { data: requests, error } = await supabase
         .from('contact_submissions')
-        .select('id, name, email, phone, company')
-        .not('email', 'is', null);
+        .select('*');
       if (error) throw error;
 
       const seenEmails = new Set<string>();
       const upserts: any[] = [];
-      for (const r of requests ?? []) {
-        const cleanEmail = (r.email ?? '').trim().toLowerCase();
+      for (const r of (requests as any[]) ?? []) {
+        const rawEmail = r.business_email || r.email || '';
+        const cleanEmail = rawEmail.trim().toLowerCase();
         if (!cleanEmail || seenEmails.has(cleanEmail)) continue;
         seenEmails.add(cleanEmail);
         upserts.push({
-          full_name: r.name ?? 'Unknown',
+          full_name: r.full_name || r.name || 'Unknown',
           email: cleanEmail,
-          phone: r.phone ?? null,
-          company: r.company ?? null,
+          phone: r.business_phone || r.phone || null,
+          company: r.business_name || r.company || null,
           lead_source: 'contact_request',
           source_id: r.id,
           status: 'active',
