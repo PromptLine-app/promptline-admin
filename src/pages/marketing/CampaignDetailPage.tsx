@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2 } from 'react-icons/fi';
+import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiTag, FiAlertTriangle } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
+
 
 export const CampaignDetailPage = () => {
   const { id } = useParams();
@@ -30,6 +31,17 @@ export const CampaignDetailPage = () => {
   const [newStepDelay, setNewStepDelay] = useState(3);
   const [newStepTemplate, setNewStepTemplate] = useState('');
   const [addingStep, setAddingStep] = useState(false);
+
+  // Activate Sequence Modal State
+  const [showActivateModal, setShowActivateModal] = useState(false);
+  const [activateFilter, setActivateFilter] = useState('all');
+  const [activating, setActivating] = useState(false);
+  const [activateResult, setActivateResult] = useState<null | { enrolled: number; dropped: number; senders: string[] }>(null);
+
+  // Reply Tagger State
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [taggingId, setTaggingId] = useState<string | null>(null);
+
 
   const handleAddStep = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,13 +131,79 @@ export const CampaignDetailPage = () => {
     }
   };
 
+  const handleActivateSequence = async () => {
+    setActivating(true);
+    setActivateResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('marketing-launch-campaign', {
+        body: { campaign_id: id, audience_filter: activateFilter }
+      });
+      if (error) {
+        let msg = error.message;
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const body = await error.context.json();
+            if (body?.error) msg = body.error + (body.details ? `: ${body.details}` : '');
+          }
+        } catch (_) {}
+        throw new Error(msg);
+      }
+      setActivateResult({
+        enrolled: data?.contacts_enrolled ?? 0,
+        dropped:  data?.contacts_dropped ?? 0,
+        senders:  data?.senders_assigned ?? [],
+      });
+      setTimeout(() => { window.location.reload(); }, 2500);
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.activateSequence' });
+      alert(`Failed to activate sequence: ${err.message}`);
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  const handleTagEnrollment = async (enrollmentId: string, tag: string, contactId: string) => {
+    setTaggingId(enrollmentId);
+    try {
+      // Determine seasonal reminder date
+      let reminderAt: string | null = null;
+      if (tag === 'not-now-spring') {
+        const feb = new Date(); feb.setMonth(1); feb.setDate(15); feb.setFullYear(feb.getFullYear() + (feb < new Date() ? 1 : 0));
+        reminderAt = feb.toISOString();
+      } else if (tag === 'not-now-summer') {
+        const apr = new Date(); apr.setMonth(3); apr.setDate(15); apr.setFullYear(apr.getFullYear() + (apr < new Date() ? 1 : 0));
+        reminderAt = apr.toISOString();
+      }
+
+      // Exit the enrollment
+      await supabase.from('campaign_enrollments')
+        .update({ status: 'exited', reply_tag: tag, reminder_at: reminderAt })
+        .eq('id', enrollmentId);
+
+      // If unsubscribed, suppress the contact
+      if (tag === 'unsubscribed') {
+        await supabase.from('email_contacts')
+          .update({ engagement_state: 'suppressed', unsubscribed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', contactId);
+      }
+
+      // Remove from local state
+      setEnrollments(prev => prev.filter(e => e.id !== enrollmentId));
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.tagEnrollment' });
+      alert(`Failed to tag: ${err.message}`);
+    } finally {
+      setTaggingId(null);
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
     const fetchAnalytics = async () => {
       try {
         const [campRes, enrollRes, stepsRes, tmplRes] = await Promise.all([
           supabase.from('marketing_campaigns').select('*').eq('id', id).single(),
-          supabase.from('campaign_enrollments').select('status, current_step_number').eq('campaign_id', id),
+          supabase.from('campaign_enrollments').select('id, status, current_step_number, contact_id, next_run_at, reply_tag, email_contacts(full_name, email, company)').eq('campaign_id', id),
           supabase.from('campaign_steps').select('*, email_templates(name)').eq('campaign_id', id).order('step_number', { ascending: true }),
           supabase.from('email_templates').select('id, name, subject, body_html').eq('is_active', true).order('name')
         ]);
@@ -138,6 +216,7 @@ export const CampaignDetailPage = () => {
         setCampaign(campRes.data);
         setSequenceSteps(stepsRes.data || []);
         setTemplates(tmplRes.data || []);
+        setEnrollments(enrollRes.data || []);
 
         // Process enrollments
         let active = 0, completed = 0, suppressed = 0;
@@ -162,6 +241,7 @@ export const CampaignDetailPage = () => {
     };
     fetchAnalytics();
   }, [id]);
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -337,16 +417,76 @@ export const CampaignDetailPage = () => {
           
           {sequenceSteps.length > 0 && (
             <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'flex-end' }}>
-              <button 
-                className="btn btn--primary" 
-                onClick={() => alert("The Sequence Engine is currently being built! This will lock the sequence and begin enrolling contacts.")}
+              <button
+                className="btn btn--primary"
+                onClick={() => setShowActivateModal(true)}
               >
-                Activate Sequence
+                <FiPlay style={{ marginRight: '0.5rem' }} /> Activate Sequence
               </button>
             </div>
           )}
         </div>
       )}
+
+      {/* Live Sequence — Active Enrollments Reply Tagger */}
+      {campaign.type === 'sequence' && campaign.status === 'live' && enrollments.filter(e => e.status === 'active').length > 0 && (
+        <div className="page-card" style={{ padding: '2rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FiTag /> Active Prospects — Reply Actions
+          </h2>
+          <p className="text-muted" style={{ marginBottom: '1rem', fontSize: '0.875rem' }}>
+            When a prospect replies, select the appropriate tag to exit them from the sequence.
+          </p>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Contact</th>
+                <th>Company</th>
+                <th>Step</th>
+                <th>Next Send</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {enrollments.filter(e => e.status === 'active').map(enr => (
+                <tr key={enr.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{(enr.email_contacts as any)?.full_name ?? '—'}</div>
+                    <div className="text-muted" style={{ fontSize: '0.8rem' }}>{(enr.email_contacts as any)?.email}</div>
+                  </td>
+                  <td className="text-muted">{(enr.email_contacts as any)?.company ?? '—'}</td>
+                  <td style={{ fontWeight: 500 }}>Step {enr.current_step_number}</td>
+                  <td className="text-muted">{enr.next_run_at ? new Date(enr.next_run_at).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <select
+                      className="form-input"
+                      style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                      defaultValue=""
+                      disabled={taggingId === enr.id}
+                      onChange={e => {
+                        const tag = e.target.value;
+                        if (!tag) return;
+                        if (confirm(`Tag this prospect as "${tag}" and exit the sequence?`)) {
+                          handleTagEnrollment(enr.id, tag, enr.contact_id);
+                        } else {
+                          e.target.value = '';
+                        }
+                      }}
+                    >
+                      <option value="">— Tag reply —</option>
+                      <option value="interested">✅ Interested</option>
+                      <option value="not-now-spring">🌱 Not now — remind in Feb (spring)</option>
+                      <option value="not-now-summer">☀️ Not now — remind in Apr (summer)</option>
+                      <option value="unsubscribed">🚫 Unsubscribed</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
 
       {/* Broadcast Setup UI (Phase 4) */}
       {campaign.status === 'draft' && campaign.type === 'broadcast' && (
@@ -397,61 +537,67 @@ export const CampaignDetailPage = () => {
         </div>
       )}
 
-      {/* Add Step Modal */}
-      {showStepModal && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="page-card" style={{ width: 440, padding: '1.5rem', background: 'hsl(var(--background))' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Add Sequence Step</h2>
-              <button 
-                type="button" 
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} 
-                onClick={() => setShowStepModal(false)}
-              >
+      {/* Activate Sequence Modal */}
+      {showActivateModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="page-card" style={{ width: 520, padding: '1.75rem', background: 'hsl(var(--background))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}><FiPlay style={{ marginRight: '0.5rem' }} />Activate Sequence</h2>
+              <button type="button" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => { setShowActivateModal(false); setActivateResult(null); }}>
                 <FiX size={18} />
               </button>
             </div>
-            <form onSubmit={handleAddStep}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label">Step {sequenceSteps.length + 1} — Email Template</label>
-                <select 
-                  className="form-input" 
-                  value={newStepTemplate} 
-                  onChange={e => setNewStepTemplate(e.target.value)}
-                  required
-                >
-                  <option value="">— Select a template —</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
 
-              {sequenceSteps.length > 0 && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label className="form-label">Delay After Previous Step (Days)</label>
-                  <input 
-                    type="number" 
-                    min={1} 
-                    max={90} 
-                    className="form-input" 
-                    value={newStepDelay}
-                    onChange={e => setNewStepDelay(Number(e.target.value))}
-                    required
-                  />
-                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                    Days to wait before sending this email after step {sequenceSteps.length}.
-                  </p>
+            {activateResult ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                <FiCheckCircle size={40} style={{ color: 'hsl(var(--c2))', marginBottom: '1rem' }} />
+                <h3 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Sequence Activated!</h3>
+                <p className="text-muted">{activateResult.enrolled} contact(s) enrolled. {activateResult.dropped > 0 ? `${activateResult.dropped} dropped (missing first name or company).` : ''}</p>
+                {activateResult.senders.length > 0 && <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Sending via: {activateResult.senders.join(', ')}</p>}
+                <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Reloading page…</p>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label className="form-label">Target Audience</label>
+                  <select className="form-input" value={activateFilter} onChange={e => setActivateFilter(e.target.value)}>
+                    <option value="all">All Active Contacts</option>
+                    <option value="warm">Warm Leads Only</option>
+                    <option value="cold">Cold Leads Only</option>
+                    <option value="hot">Hot Leads Only</option>
+                  </select>
+                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Contacts with a missing first name or company will be dropped automatically.</p>
                 </div>
-              )}
 
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn--secondary" onClick={() => setShowStepModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn--primary" disabled={addingStep || !newStepTemplate}>
-                  {addingStep ? 'Adding...' : 'Add Step'}
-                </button>
-              </div>
-            </form>
+                <div style={{ background: 'hsl(var(--secondary))', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
+                  <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>📅 30-Day Cadence</p>
+                  <p className="text-muted">Day 0 → 3 → 7 → 12 → 18 → 24 → 30</p>
+                  <p className="text-muted" style={{ marginTop: '0.25rem' }}>Weekday-only sends. Saturday/Sunday auto-shift to Monday.</p>
+                  <p style={{ fontWeight: 600, marginTop: '0.75rem', marginBottom: '0.25rem' }}>👥 Sender Rotation</p>
+                  <p className="text-muted">Contacts are round-robin assigned to Shantanu, Ranjit, and Prashant. Each prospect receives all 7 emails from the same founder.</p>
+                  <p style={{ fontWeight: 600, marginTop: '0.75rem', marginBottom: '0.25rem' }}>🧵 Email Threading</p>
+                  <p className="text-muted">Emails 2–7 thread as replies to Email 1 in the prospect's inbox.</p>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'hsl(var(--c3) / 0.1)', borderRadius: 8, marginBottom: '1.25rem' }}>
+                  <FiAlertTriangle style={{ color: 'hsl(var(--c3))', flexShrink: 0 }} />
+                  <p style={{ fontSize: '0.8rem', color: 'hsl(var(--c3))' }}>Ensure all 5 feature claims (Spanish switch, calendar, triage, ServiceTitan, demo format) have been verified with Shantanu or Mayur before activating against real prospects.</p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn--secondary" onClick={() => setShowActivateModal(false)}>Cancel</button>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    disabled={activating}
+                    onClick={handleActivateSequence}
+                  >
+                    <FiPlay style={{ marginRight: '0.5rem' }} />
+                    {activating ? 'Activating…' : 'Confirm & Activate Sequence'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
