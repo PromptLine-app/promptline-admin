@@ -36,13 +36,14 @@ export const SendEmailPage = () => {
   const [sending, setSending] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
+  const [contactTagFilter, setContactTagFilter] = useState('');
 
   useEffect(() => {
     const load = async () => {
       const [{ data: sData }, { data: tData }, { data: cData }] = await Promise.all([
         supabase.from('marketing_senders').select('*').eq('is_active', true).eq('is_connected', true),
         supabase.from('email_templates').select('*').eq('is_active', true).order('is_starter', { ascending: false }),
-        supabase.from('email_contacts').select('id, full_name, email, company, monthly_loss, industry, phone').eq('status', 'active').order('full_name'),
+        supabase.from('email_contacts').select('id, full_name, email, company, monthly_loss, industry, phone, tags').eq('status', 'active').order('full_name'),
       ]);
       setSenders((sData ?? []) as MarketingSender[]);
       setTemplates((tData ?? []) as EmailTemplate[]);
@@ -142,7 +143,9 @@ export const SendEmailPage = () => {
 
   const filteredContacts = contacts.filter(c => {
     const q = contactSearch.toLowerCase();
-    return !q || c.full_name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || (c.company ?? '').toLowerCase().includes(q);
+    const matchSearch = !q || c.full_name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || (c.company ?? '').toLowerCase().includes(q);
+    const matchTag = !contactTagFilter || (c.tags ?? []).includes(contactTagFilter);
+    return matchSearch && matchTag;
   });
 
   return (
@@ -209,12 +212,38 @@ export const SendEmailPage = () => {
 
             {recipientMode === 'contact' ? (
               <div>
-                <input className="form-input" style={{ marginBottom: '0.5rem' }} placeholder="Search contacts..." value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <input
+                    className="form-input"
+                    style={{ flex: 1 }}
+                    placeholder="Search contacts..."
+                    value={contactSearch}
+                    onChange={e => setContactSearch(e.target.value)}
+                  />
+                  <select
+                    className="form-input"
+                    style={{ width: '210px', fontSize: '0.8rem' }}
+                    value={contactTagFilter}
+                    onChange={e => setContactTagFilter(e.target.value)}
+                  >
+                    <option value="">All Lists ({contacts.length})</option>
+                    <option value="lawn-care">🌱 Sequence A: Lawn ({contacts.filter(c => (c.tags || []).includes('lawn-care')).length})</option>
+                    <option value="hvac-plumbing">🔧 Sequence B: HVAC ({contacts.filter(c => (c.tags || []).includes('hvac-plumbing')).length})</option>
+                    <option value="cedar-rapids-ia">📍 Cedar Rapids, IA</option>
+                    <option value="charlotte-nc">📍 Charlotte, NC</option>
+                  </select>
+                </div>
                 <select className="form-input" value={selectedContact} onChange={e => handleContactChange(e.target.value)}>
-                  <option value="">— Select a contact —</option>
-                  {filteredContacts.map(c => (
-                    <option key={c.id} value={c.id}>{c.full_name} — {c.email}{c.company ? ` (${c.company})` : ''}</option>
-                  ))}
+                  <option value="">— Select a contact ({filteredContacts.length} available) —</option>
+                  {filteredContacts.map(c => {
+                    const tagBadge = (c.tags || []).includes('lawn-care') ? ' [Lawn]' :
+                                     (c.tags || []).includes('hvac-plumbing') ? ' [HVAC]' : '';
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.full_name} — {c.email}{c.company ? ` (${c.company})` : ''}{tagBadge}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             ) : (

@@ -206,9 +206,14 @@ export type EmailTemplate = {
 export type EmailContact = {
   id: string;
   full_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   email: string;
   phone: string | null;
   company: string | null;
+  website?: string | null;
+  city?: string | null;
+  state?: string | null;
   lead_source: 'calculator_lead' | 'contact_request' | 'user_followup' | 'csv_import' | 'manual';
   source_id: string | null;
   tags: string[];

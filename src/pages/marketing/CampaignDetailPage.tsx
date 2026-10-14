@@ -35,6 +35,8 @@ export const CampaignDetailPage = () => {
   // Activate Sequence Modal State
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [activateFilter, setActivateFilter] = useState('all');
+  const [activateTag, setActivateTag] = useState('all');
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [activating, setActivating] = useState(false);
   const [activateResult, setActivateResult] = useState<null | { enrolled: number; dropped: number; senders: string[] }>(null);
 
@@ -136,7 +138,7 @@ export const CampaignDetailPage = () => {
     setActivateResult(null);
     try {
       const { data, error } = await supabase.functions.invoke('marketing-launch-campaign', {
-        body: { campaign_id: id, audience_filter: activateFilter }
+        body: { campaign_id: id, audience_filter: activateFilter, tag_filter: activateTag }
       });
       if (error) {
         let msg = error.message;
@@ -233,6 +235,12 @@ export const CampaignDetailPage = () => {
         });
 
         setStats({ active, completed, suppressed, stepDistribution: stepDist });
+
+        // Discover distinct tags
+        const { data: contactsData } = await supabase.from('email_contacts').select('tags').limit(1000);
+        const tagSet = new Set<string>();
+        (contactsData ?? []).forEach((c: any) => (c.tags ?? []).forEach((t: string) => tagSet.add(t)));
+        setAvailableTags(Array.from(tagSet).sort());
       } catch (err) {
         reportError(err, { where: 'CampaignDetailPage' });
       } finally {
@@ -419,7 +427,13 @@ export const CampaignDetailPage = () => {
             <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 className="btn btn--primary"
-                onClick={() => setShowActivateModal(true)}
+                onClick={() => {
+                  const name = campaign?.name?.toLowerCase() ?? '';
+                  if (name.includes('lawn')) setActivateTag('lawn-care');
+                  else if (name.includes('hvac') || name.includes('plumb')) setActivateTag('hvac-plumbing');
+                  else setActivateTag('all');
+                  setShowActivateModal(true);
+                }}
               >
                 <FiPlay style={{ marginRight: '0.5rem' }} /> Activate Sequence
               </button>
@@ -559,14 +573,31 @@ export const CampaignDetailPage = () => {
             ) : (
               <>
                 <div style={{ marginBottom: '1.25rem' }}>
-                  <label className="form-label">Target Audience</label>
+                  <label className="form-label">Target Tag (Niche / List Filter)</label>
+                  <select className="form-input" value={activateTag} onChange={e => setActivateTag(e.target.value)}>
+                    <option value="all">All Tags (No tag filter)</option>
+                    <option value="lawn-care">🌱 lawn-care (Sequence A: Lawn Care)</option>
+                    <option value="hvac-plumbing">🔧 hvac-plumbing (Sequence B: HVAC & Plumbing)</option>
+                    <option value="cedar-rapids-ia">📍 cedar-rapids-ia</option>
+                    <option value="charlotte-nc">📍 charlotte-nc</option>
+                    {availableTags.filter(t => !['lawn-care', 'hvac-plumbing', 'cedar-rapids-ia', 'charlotte-nc', 'csv-import'].includes(t)).map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                    Only contacts with this tag will be enrolled into this sequence.
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label className="form-label">Target Engagement State</label>
                   <select className="form-input" value={activateFilter} onChange={e => setActivateFilter(e.target.value)}>
                     <option value="all">All Active Contacts</option>
                     <option value="warm">Warm Leads Only</option>
                     <option value="cold">Cold Leads Only</option>
                     <option value="hot">Hot Leads Only</option>
                   </select>
-                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Contacts with a missing first name or company will be dropped automatically.</p>
+                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>Contacts with a missing first name or company will be dropped automatically.</p>
                 </div>
 
                 <div style={{ background: 'hsl(var(--secondary))', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
