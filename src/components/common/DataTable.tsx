@@ -2,7 +2,7 @@ import { useState, useMemo, ReactNode, Key } from 'react';
 import { FiChevronUp, FiChevronDown } from 'react-icons/fi';
 
 export type ColumnDef<T> = {
-  header: string;
+  header: ReactNode;
   accessorKey?: keyof T;
   id?: string;
   cell?: (row: T) => ReactNode;
@@ -76,7 +76,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 const isSortable = col.sortable !== false && key;
                 return (
                   <th
-                    key={col.header}
+                    key={col.id || (col.accessorKey as string) || (typeof col.header === 'string' ? col.header : 'col')}
                     onClick={() => isSortable && handleSort(key as string)}
                     className={sortKey === key ? 'sorted' : ''}
                     style={{ cursor: isSortable ? 'pointer' : 'default' }}
@@ -99,8 +99,8 @@ export function DataTable<T extends Record<string, unknown>>({
                 onClick={() => onRowClick && onRowClick(row)}
                 className={onRowClick ? 'clickable' : ''}
               >
-                {columns.map((col) => (
-                  <td key={col.header}>
+                {columns.map((col, cIdx) => (
+                  <td key={col.id || (col.accessorKey as string) || (typeof col.header === 'string' ? col.header : cIdx)}>
                     {col.cell ? col.cell(row) : col.accessorKey ? String(row[col.accessorKey] ?? '') : ''}
                   </td>
                 ))}
