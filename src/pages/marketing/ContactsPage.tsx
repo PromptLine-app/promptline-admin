@@ -8,7 +8,7 @@ import { reportError } from '@/lib/sentry';
 import type { EmailContact } from '@/types/domain';
 import {
   FiRefreshCw, FiUpload, FiDownload,
-  FiX, FiCheck, FiAlertCircle, FiExternalLink, FiTag,
+  FiX, FiCheck, FiAlertCircle, FiExternalLink, FiTag, FiPlay,
 } from 'react-icons/fi';
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -62,6 +62,13 @@ export const ContactsPage = () => {
   const [csvTags, setCsvTags] = useState<string>('csv-import');
   const [showImportModal, setShowImportModal] = useState(false);
 
+  // Selection & Sequence Enrollment State
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+  const [showSequenceModal, setShowSequenceModal] = useState(false);
+  const [sequences, setSequences] = useState<any[]>([]);
+  const [selectedSequenceId, setSelectedSequenceId] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
+
   const loadContacts = useCallback(async () => {
     setLoading(true);
     try {
@@ -80,6 +87,26 @@ export const ContactsPage = () => {
   }, [toast]);
 
   useEffect(() => { loadContacts(); }, [loadContacts]);
+
+  useEffect(() => {
+    const fetchSequences = async () => {
+      try {
+        const { data } = await supabase
+          .from('marketing_campaigns')
+          .select('id, name, status, type')
+          .eq('type', 'sequence')
+          .in('status', ['draft', 'live'])
+          .order('name');
+        setSequences(data || []);
+        if (data && data.length > 0 && !selectedSequenceId) {
+          setSelectedSequenceId(data[0].id);
+        }
+      } catch (err) {
+        reportError(err, { where: 'ContactsPage.fetchSequences' });
+      }
+    };
+    fetchSequences();
+  }, []);
 
   // Extract all distinct tags from contacts
   const allTags = useMemo(() => {
@@ -355,7 +382,90 @@ export const ContactsPage = () => {
     return matchSearch && matchSource && matchTag;
   });
 
+  const isAllFilteredSelected = filtered.length > 0 && filtered.every(c => selectedContactIds.has(c.id));
+  const isSomeFilteredSelected = filtered.some(c => selectedContactIds.has(c.id));
+
+  const toggleSelectAllFiltered = () => {
+    const next = new Set(selectedContactIds);
+    if (isAllFilteredSelected) {
+      filtered.forEach(c => next.delete(c.id));
+    } else {
+      filtered.forEach(c => next.add(c.id));
+    }
+    setSelectedContactIds(next);
+  };
+
+  const toggleSelectContact = (id: string) => {
+    const next = new Set(selectedContactIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedContactIds(next);
+  };
+
+  const handleEnrollSelectedInSequence = async () => {
+    if (!selectedSequenceId || selectedContactIds.size === 0) return;
+    setEnrolling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('marketing-launch-campaign', {
+        body: {
+          campaign_id: selectedSequenceId,
+          contact_ids: Array.from(selectedContactIds),
+        },
+      });
+
+      if (error) {
+        let msg = error.message;
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const body = await error.context.json();
+            if (body?.error) msg = body.error + (body.details ? `: ${body.details}` : '');
+          }
+        } catch (_) {}
+        throw new Error(msg);
+      }
+
+      toast(
+        `Successfully enrolled ${data?.contacts_enrolled ?? selectedContactIds.size} contact(s) into sequence!`,
+        'success'
+      );
+      setSelectedContactIds(new Set());
+      setShowSequenceModal(false);
+    } catch (err: any) {
+      reportError(err, { where: 'ContactsPage.enrollInSequence' });
+      toast(err?.message || 'Failed to enroll contacts', 'error');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
   const columns: ColumnDef<EmailContact>[] = [
+    {
+      id: 'select',
+      header: (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isAllFilteredSelected}
+            ref={el => {
+              if (el) el.indeterminate = isSomeFilteredSelected && !isAllFilteredSelected;
+            }}
+            onChange={toggleSelectAllFiltered}
+            style={{ cursor: 'pointer' }}
+          />
+        </div>
+      ),
+      sortable: false,
+      cell: (row) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selectedContactIds.has(row.id)}
+            onChange={() => toggleSelectContact(row.id)}
+            style={{ cursor: 'pointer' }}
+          />
+        </div>
+      ),
+    },
     {
       header: 'Name', id: 'full_name',
       cell: (row) => (
@@ -598,6 +708,109 @@ export const ContactsPage = () => {
               <button className="btn btn--secondary" onClick={() => setShowImportModal(false)}>Cancel</button>
               <button className="btn btn--primary" onClick={handleImportConfirm} disabled={!csvMapping.email || importing}>
                 <FiCheck style={{ marginRight: '0.3rem' }} />{importing ? 'Importing…' : 'Import Contacts'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Batch Selection Bar */}
+      {selectedContactIds.size > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '2rem',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'hsl(var(--card))',
+          border: '1px solid hsl(var(--primary))',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
+          borderRadius: '999px',
+          padding: '0.6rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          zIndex: 90,
+        }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+            {selectedContactIds.size} contact{selectedContactIds.size > 1 ? 's' : ''} selected
+          </span>
+          <div style={{ height: 16, width: 1, background: 'hsl(var(--border))' }} />
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={() => setSelectedContactIds(new Set())}
+            style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', borderRadius: '999px' }}
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => setShowSequenceModal(true)}
+            style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '999px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <FiPlay size={13} /> Add to Sequence
+          </button>
+        </div>
+      )}
+
+      {/* Sequence Enrollment Modal */}
+      {showSequenceModal && (
+        <div className="modal-backdrop" onClick={() => setShowSequenceModal(false)}>
+          <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiPlay /> Enroll in Sequence
+              </h3>
+              <button className="icon-button" onClick={() => setShowSequenceModal(false)}><FiX /></button>
+            </div>
+
+            <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+              Enroll <strong>{selectedContactIds.size} selected contact(s)</strong> directly into an automated sequence.
+            </p>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="form-label">Target Cold Sequence</label>
+              <select
+                className="form-input"
+                value={selectedSequenceId}
+                onChange={e => setSelectedSequenceId(e.target.value)}
+              >
+                {sequences.length === 0 ? (
+                  <option value="">No active sequence campaigns found</option>
+                ) : (
+                  sequences.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.status.toUpperCase()})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div style={{ background: 'hsl(var(--secondary) / 0.5)', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
+              <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>👥 Founder Round-Robin Assignment</p>
+              <p className="text-muted" style={{ margin: 0 }}>
+                Contacts will be distributed evenly across Shantanu, Ranjit, and Prashant. Day 0 will be scheduled on the next weekday.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => setShowSequenceModal(false)}
+                disabled={enrolling}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={enrolling || !selectedSequenceId}
+                onClick={handleEnrollSelectedInSequence}
+              >
+                {enrolling ? 'Enrolling…' : `Confirm & Enroll ${selectedContactIds.size} Leads`}
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiTag, FiAlertTriangle } from 'react-icons/fi';
+import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiTag, FiAlertTriangle, FiSearch, FiCheckSquare, FiSquare, FiSliders, FiList } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
 
@@ -32,11 +32,17 @@ export const CampaignDetailPage = () => {
   const [newStepTemplate, setNewStepTemplate] = useState('');
   const [addingStep, setAddingStep] = useState(false);
 
-  // Activate Sequence Modal State
+  // Activate / Enroll Sequence Modal State
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [activateFilter, setActivateFilter] = useState('all');
   const [activateTag, setActivateTag] = useState('all');
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [enrollMode, setEnrollMode] = useState<'batch' | 'select' | 'all'>('batch');
+  const [batchLimit, setBatchLimit] = useState(25);
+  const [candidateContacts, setCandidateContacts] = useState<any[]>([]);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+  const [candidateSearch, setCandidateSearch] = useState('');
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [activating, setActivating] = useState(false);
   const [activateResult, setActivateResult] = useState<null | { enrolled: number; dropped: number; senders: string[] }>(null);
 
@@ -133,19 +139,89 @@ export const CampaignDetailPage = () => {
     }
   };
 
+  const openEnrollModal = () => {
+    const name = campaign?.name?.toLowerCase() ?? '';
+    if (name.includes('lawn')) setActivateTag('lawn-care');
+    else if (name.includes('hvac') || name.includes('plumb')) setActivateTag('hvac-plumbing');
+    else setActivateTag('all');
+    setShowActivateModal(true);
+  };
+
+  useEffect(() => {
+    if (!showActivateModal || !id) return;
+    const fetchCandidates = async () => {
+      setLoadingCandidates(true);
+      try {
+        let q = supabase
+          .from('email_contacts')
+          .select('id, full_name, first_name, last_name, email, company, city, state, tags, engagement_state')
+          .eq('status', 'active')
+          .neq('engagement_state', 'suppressed')
+          .not('company', 'is', null);
+
+        if (activateFilter === 'warm') q = q.eq('engagement_state', 'warm');
+        else if (activateFilter === 'cold') q = q.eq('engagement_state', 'cold');
+        else if (activateFilter === 'hot') q = q.eq('engagement_state', 'hot');
+
+        if (activateTag && activateTag !== 'all') {
+          q = q.contains('tags', [activateTag]);
+        }
+
+        const { data, error } = await q;
+        if (error) throw error;
+
+        const enrolledSet = new Set(enrollments.map(e => e.contact_id));
+        const eligible = (data || []).filter((c: any) => {
+          if (enrolledSet.has(c.id)) return false;
+          const fn = (c.first_name ?? '').trim() || (c.full_name ?? '').trim().split(/\s+/)[0];
+          return fn.length > 0 && fn.toLowerCase() !== 'unknown' && (c.company ?? '').trim().length > 0;
+        });
+
+        setCandidateContacts(eligible);
+        setSelectedCandidateIds(new Set());
+      } catch (err) {
+        reportError(err, { where: 'CampaignDetailPage.fetchCandidates' });
+      } finally {
+        setLoadingCandidates(false);
+      }
+    };
+    fetchCandidates();
+  }, [showActivateModal, activateTag, activateFilter, id, enrollments]);
+
   const handleActivateSequence = async () => {
+    if (enrollMode === 'select' && selectedCandidateIds.size === 0) {
+      alert("Please select at least one contact to enroll.");
+      return;
+    }
+    if (enrollMode === 'batch' && (!batchLimit || Number(batchLimit) <= 0)) {
+      alert("Please enter a valid batch size (e.g. 25).");
+      return;
+    }
+
     setActivating(true);
     setActivateResult(null);
     try {
+      const body: Record<string, unknown> = {
+        campaign_id: id,
+        audience_filter: activateFilter,
+        tag_filter: activateTag,
+      };
+
+      if (enrollMode === 'batch') {
+        body.batch_limit = Number(batchLimit);
+      } else if (enrollMode === 'select') {
+        body.contact_ids = Array.from(selectedCandidateIds);
+      }
+
       const { data, error } = await supabase.functions.invoke('marketing-launch-campaign', {
-        body: { campaign_id: id, audience_filter: activateFilter, tag_filter: activateTag }
+        body,
       });
       if (error) {
         let msg = error.message;
         try {
           if (error.context && typeof error.context.json === 'function') {
-            const body = await error.context.json();
-            if (body?.error) msg = body.error + (body.details ? `: ${body.details}` : '');
+            const bodyJson = await error.context.json();
+            if (bodyJson?.error) msg = bodyJson.error + (bodyJson.details ? `: ${bodyJson.details}` : '');
           }
         } catch (_) {}
         throw new Error(msg);
@@ -158,7 +234,7 @@ export const CampaignDetailPage = () => {
       setTimeout(() => { window.location.reload(); }, 2500);
     } catch (err: any) {
       reportError(err, { where: 'CampaignDetailPage.activateSequence' });
-      alert(`Failed to activate sequence: ${err.message}`);
+      alert(`Failed to activate/enroll: ${err.message}`);
     } finally {
       setActivating(false);
     }
@@ -325,6 +401,16 @@ export const CampaignDetailPage = () => {
             </p>
           </div>
         </div>
+
+        {campaign.type === 'sequence' && (
+          <button 
+            className="btn btn--primary"
+            onClick={openEnrollModal}
+          >
+            <FiPlay style={{ marginRight: '0.4rem' }} />
+            {campaign.status === 'live' ? 'Enroll Contacts / Add Batch' : 'Activate Sequence'}
+          </button>
+        )}
       </div>
 
       {/* KPI Row */}
@@ -427,13 +513,7 @@ export const CampaignDetailPage = () => {
             <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 className="btn btn--primary"
-                onClick={() => {
-                  const name = campaign?.name?.toLowerCase() ?? '';
-                  if (name.includes('lawn')) setActivateTag('lawn-care');
-                  else if (name.includes('hvac') || name.includes('plumb')) setActivateTag('hvac-plumbing');
-                  else setActivateTag('all');
-                  setShowActivateModal(true);
-                }}
+                onClick={openEnrollModal}
               >
                 <FiPlay style={{ marginRight: '0.5rem' }} /> Activate Sequence
               </button>
@@ -551,12 +631,15 @@ export const CampaignDetailPage = () => {
         </div>
       )}
 
-      {/* Activate Sequence Modal */}
+      {/* Activate / Enroll Sequence Modal */}
       {showActivateModal && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="page-card" style={{ width: 520, padding: '1.75rem', background: 'hsl(var(--background))' }}>
+          <div className="page-card" style={{ width: 620, maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', background: 'hsl(var(--background))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}><FiPlay style={{ marginRight: '0.5rem' }} />Activate Sequence</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiPlay />
+                {campaign.status === 'live' ? 'Enroll Contacts into Live Sequence' : 'Activate Cold Email Sequence'}
+              </h2>
               <button type="button" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => { setShowActivateModal(false); setActivateResult(null); }}>
                 <FiX size={18} />
               </button>
@@ -565,54 +648,238 @@ export const CampaignDetailPage = () => {
             {activateResult ? (
               <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
                 <FiCheckCircle size={40} style={{ color: 'hsl(var(--c2))', marginBottom: '1rem' }} />
-                <h3 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Sequence Activated!</h3>
-                <p className="text-muted">{activateResult.enrolled} contact(s) enrolled. {activateResult.dropped > 0 ? `${activateResult.dropped} dropped (missing first name or company).` : ''}</p>
-                {activateResult.senders.length > 0 && <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Sending via: {activateResult.senders.join(', ')}</p>}
-                <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Reloading page…</p>
+                <h3 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Contacts Enrolled Successfully!</h3>
+                <p className="text-muted">{activateResult.enrolled} contact(s) enrolled into sequence. {activateResult.dropped > 0 ? `${activateResult.dropped} dropped (missing first name or company).` : ''}</p>
+                {activateResult.senders.length > 0 && <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Assigned Send Mailboxes: {activateResult.senders.join(', ')}</p>}
+                <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Reloading sequence dashboard…</p>
               </div>
             ) : (
               <>
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <label className="form-label">Target Tag (Niche / List Filter)</label>
-                  <select className="form-input" value={activateTag} onChange={e => setActivateTag(e.target.value)}>
-                    <option value="all">All Tags (No tag filter)</option>
-                    <option value="lawn-care">🌱 lawn-care (Sequence A: Lawn Care)</option>
-                    <option value="hvac-plumbing">🔧 hvac-plumbing (Sequence B: HVAC & Plumbing)</option>
-                    <option value="cedar-rapids-ia">📍 cedar-rapids-ia</option>
-                    <option value="charlotte-nc">📍 charlotte-nc</option>
-                    {availableTags.filter(t => !['lawn-care', 'hvac-plumbing', 'cedar-rapids-ia', 'charlotte-nc', 'csv-import'].includes(t)).map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
-                    Only contacts with this tag will be enrolled into this sequence.
-                  </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                  <div>
+                    <label className="form-label">Target Tag (Niche / List)</label>
+                    <select className="form-input" value={activateTag} onChange={e => setActivateTag(e.target.value)}>
+                      <option value="all">All Tags (No tag filter)</option>
+                      <option value="lawn-care">🌱 lawn-care</option>
+                      <option value="hvac-plumbing">🔧 hvac-plumbing</option>
+                      <option value="cedar-rapids-ia">📍 cedar-rapids-ia</option>
+                      <option value="charlotte-nc">📍 charlotte-nc</option>
+                      {availableTags.filter(t => !['lawn-care', 'hvac-plumbing', 'cedar-rapids-ia', 'charlotte-nc', 'csv-import'].includes(t)).map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="form-label">Engagement State</label>
+                    <select className="form-input" value={activateFilter} onChange={e => setActivateFilter(e.target.value)}>
+                      <option value="all">All Active Contacts</option>
+                      <option value="warm">Warm Leads Only</option>
+                      <option value="cold">Cold Leads Only</option>
+                      <option value="hot">Hot Leads Only</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <label className="form-label">Target Engagement State</label>
-                  <select className="form-input" value={activateFilter} onChange={e => setActivateFilter(e.target.value)}>
-                    <option value="all">All Active Contacts</option>
-                    <option value="warm">Warm Leads Only</option>
-                    <option value="cold">Cold Leads Only</option>
-                    <option value="hot">Hot Leads Only</option>
-                  </select>
-                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>Contacts with a missing first name or company will be dropped automatically.</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'hsl(var(--secondary) / 0.5)', borderRadius: 6, marginBottom: '1.25rem', fontSize: '0.8rem' }}>
+                  <span>Eligible un-enrolled leads:</span>
+                  <span style={{ fontWeight: 700, color: 'hsl(var(--primary))' }}>
+                    {loadingCandidates ? 'Calculating...' : `${candidateContacts.length} contacts`}
+                  </span>
                 </div>
+
+                {/* Enrollment Mode Tabs */}
+                <label className="form-label" style={{ marginBottom: '0.5rem' }}>Enrollment Strategy</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                  <button
+                    type="button"
+                    className={`btn ${enrollMode === 'batch' ? 'btn--primary' : 'btn--secondary'}`}
+                    style={{ padding: '0.5rem 0.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                    onClick={() => setEnrollMode('batch')}
+                  >
+                    <FiSliders /> Batch Limit
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${enrollMode === 'select' ? 'btn--primary' : 'btn--secondary'}`}
+                    style={{ padding: '0.5rem 0.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                    onClick={() => setEnrollMode('select')}
+                  >
+                    <FiCheckSquare /> Hand-pick ({selectedCandidateIds.size})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${enrollMode === 'all' ? 'btn--primary' : 'btn--secondary'}`}
+                    style={{ padding: '0.5rem 0.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                    onClick={() => setEnrollMode('all')}
+                  >
+                    <FiUsers /> All ({candidateContacts.length})
+                  </button>
+                </div>
+
+                {/* Mode 1: Batch Limit */}
+                {enrollMode === 'batch' && (
+                  <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', border: '1px solid hsl(var(--border))' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Send Batch Limit</span>
+                      <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                        Recommended for ramping up mailbox reputation
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                      <input
+                        type="number"
+                        min={1}
+                        max={candidateContacts.length || 1000}
+                        value={batchLimit}
+                        onChange={e => setBatchLimit(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="form-input"
+                        style={{ width: 100, textAlign: 'center', fontWeight: 700, fontSize: '1rem' }}
+                      />
+                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        {[25, 50, 100].map(size => (
+                          <button
+                            key={size}
+                            type="button"
+                            className="btn btn--secondary"
+                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: batchLimit === size ? 700 : 500 }}
+                            onClick={() => setBatchLimit(size)}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                        {candidateContacts.length > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn--secondary"
+                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: batchLimit === candidateContacts.length ? 700 : 500 }}
+                            onClick={() => setBatchLimit(candidateContacts.length)}
+                          >
+                            All ({candidateContacts.length})
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem', margin: 0 }}>
+                      Enrolls the next <strong>{Math.min(batchLimit, candidateContacts.length)}</strong> contacts. Founder mailboxes (Shantanu, Ranjit, Prashant) continue rotating seamlessly.
+                    </p>
+                  </div>
+                )}
+
+                {/* Mode 2: Hand-pick Specific Contacts */}
+                {enrollMode === 'select' && (
+                  <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '0.85rem', marginBottom: '1.25rem', border: '1px solid hsl(var(--border))' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ width: '100%', paddingLeft: '2rem', fontSize: '0.8rem' }}
+                          placeholder="Search contacts by name, company, email..."
+                          value={candidateSearch}
+                          onChange={e => setCandidateSearch(e.target.value)}
+                        />
+                        <FiSearch style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted-foreground))' }} />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                        onClick={() => {
+                          const next = new Set(selectedCandidateIds);
+                          const filtered = candidateContacts.filter(c => {
+                            if (!candidateSearch) return true;
+                            const q = candidateSearch.toLowerCase();
+                            return (c.full_name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q) || (c.company || '').toLowerCase().includes(q);
+                          });
+                          filtered.forEach(c => next.add(c.id));
+                          setSelectedCandidateIds(next);
+                        }}
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                        onClick={() => setSelectedCandidateIds(new Set())}
+                      >
+                        Clear
+                      </button>
+                    </div>
+
+                    <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid hsl(var(--border))', borderRadius: 6, background: 'hsl(var(--background))' }}>
+                      {loadingCandidates ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }} className="text-muted">Loading contacts...</div>
+                      ) : candidateContacts.length === 0 ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }} className="text-muted">No eligible un-enrolled contacts.</div>
+                      ) : (
+                        candidateContacts
+                          .filter(c => {
+                            if (!candidateSearch) return true;
+                            const q = candidateSearch.toLowerCase();
+                            return (c.full_name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q) || (c.company || '').toLowerCase().includes(q);
+                          })
+                          .map(c => {
+                            const isSelected = selectedCandidateIds.has(c.id);
+                            return (
+                              <label
+                                key={c.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.6rem',
+                                  padding: '0.45rem 0.75rem',
+                                  borderBottom: '1px solid hsl(var(--border))',
+                                  cursor: 'pointer',
+                                  background: isSelected ? 'hsl(var(--primary) / 0.08)' : 'transparent',
+                                  fontSize: '0.8rem',
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    const next = new Set(selectedCandidateIds);
+                                    if (isSelected) next.delete(c.id);
+                                    else next.add(c.id);
+                                    setSelectedCandidateIds(next);
+                                  }}
+                                />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontWeight: 600 }}>{c.first_name || c.full_name}</span>
+                                  {c.company && <span className="text-muted" style={{ marginLeft: '0.5rem' }}>· {c.company}</span>}
+                                  <span className="text-muted" style={{ display: 'block', fontSize: '0.72rem' }}>{c.email}</span>
+                                </div>
+                              </label>
+                            );
+                          })
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem', fontSize: '0.75rem' }} className="text-muted">
+                      <span>{selectedCandidateIds.size} selected</span>
+                      <span>{candidateContacts.length} total available</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode 3: All Matching */}
+                {enrollMode === 'all' && (
+                  <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', border: '1px solid hsl(var(--border))' }}>
+                    <p style={{ margin: 0, fontSize: '0.85rem' }}>
+                      Will enroll all <strong>{candidateContacts.length}</strong> eligible contacts matching tag <code>{activateTag}</code> into this sequence.
+                    </p>
+                  </div>
+                )}
 
                 <div style={{ background: 'hsl(var(--secondary))', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
-                  <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>📅 30-Day Cadence</p>
-                  <p className="text-muted">Day 0 → 3 → 7 → 12 → 18 → 24 → 30</p>
-                  <p className="text-muted" style={{ marginTop: '0.25rem' }}>Weekday-only sends. Saturday/Sunday auto-shift to Monday.</p>
-                  <p style={{ fontWeight: 600, marginTop: '0.75rem', marginBottom: '0.25rem' }}>👥 Sender Rotation</p>
-                  <p className="text-muted">Contacts are round-robin assigned to Shantanu, Ranjit, and Prashant. Each prospect receives all 7 emails from the same founder.</p>
-                  <p style={{ fontWeight: 600, marginTop: '0.75rem', marginBottom: '0.25rem' }}>🧵 Email Threading</p>
-                  <p className="text-muted">Emails 2–7 thread as replies to Email 1 in the prospect's inbox.</p>
+                  <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>📅 30-Day Cadence & Round-Robin Rotation</p>
+                  <p className="text-muted">Day 0 → 3 → 7 → 12 → 18 → 24 → 30 (weekdays only). Leads are distributed round-robin across Shantanu, Ranjit, and Prashant.</p>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'hsl(var(--c3) / 0.1)', borderRadius: 8, marginBottom: '1.25rem' }}>
                   <FiAlertTriangle style={{ color: 'hsl(var(--c3))', flexShrink: 0 }} />
-                  <p style={{ fontSize: '0.8rem', color: 'hsl(var(--c3))' }}>Ensure all 5 feature claims (Spanish switch, calendar, triage, ServiceTitan, demo format) have been verified with Shantanu or Mayur before activating against real prospects.</p>
+                  <p style={{ fontSize: '0.8rem', color: 'hsl(var(--c3))' }}>Ensure cold email copy and founder mailboxes are fully configured before starting outreach.</p>
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
@@ -620,11 +887,17 @@ export const CampaignDetailPage = () => {
                   <button
                     type="button"
                     className="btn btn--primary"
-                    disabled={activating}
+                    disabled={activating || (enrollMode === 'select' && selectedCandidateIds.size === 0) || candidateContacts.length === 0}
                     onClick={handleActivateSequence}
                   >
                     <FiPlay style={{ marginRight: '0.5rem' }} />
-                    {activating ? 'Activating…' : 'Confirm & Activate Sequence'}
+                    {activating
+                      ? 'Enrolling…'
+                      : enrollMode === 'batch'
+                      ? `Enroll Batch (${Math.min(batchLimit, candidateContacts.length)} Leads)`
+                      : enrollMode === 'select'
+                      ? `Enroll Selected (${selectedCandidateIds.size} Leads)`
+                      : `Enroll All (${candidateContacts.length} Leads)`}
                   </button>
                 </div>
               </>
