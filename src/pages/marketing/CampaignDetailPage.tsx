@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiTag, FiAlertTriangle, FiSearch, FiCheckSquare, FiSquare, FiSliders, FiList } from 'react-icons/fi';
+import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiPause, FiTag, FiAlertTriangle, FiSearch, FiCheckSquare, FiSquare, FiSliders, FiList } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
 
@@ -10,6 +10,7 @@ export const CampaignDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
+  const [stopping, setStopping] = useState(false);
   const [stats, setStats] = useState({
     active: 0,
     completed: 0,
@@ -240,6 +241,79 @@ export const CampaignDetailPage = () => {
     }
   };
 
+  const handlePauseSequence = async () => {
+    if (!id || !window.confirm("Are you sure you want to stop/pause this sequence? All pending and scheduled email sends will be immediately stopped.")) return;
+    setStopping(true);
+    try {
+      const { error: campErr } = await supabase
+        .from('marketing_campaigns')
+        .update({ status: 'paused', updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (campErr) throw campErr;
+
+      const { error: enrErr } = await supabase
+        .from('campaign_enrollments')
+        .update({ status: 'paused' })
+        .eq('campaign_id', id)
+        .eq('status', 'active');
+      if (enrErr) throw enrErr;
+
+      alert("Sequence stopped and paused successfully. No further emails will be sent.");
+      window.location.reload();
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.pauseSequence' });
+      alert(`Failed to pause sequence: ${err.message}`);
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const handleResumeSequence = async () => {
+    if (!id) return;
+    setStopping(true);
+    try {
+      const { error: campErr } = await supabase
+        .from('marketing_campaigns')
+        .update({ status: 'live', updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (campErr) throw campErr;
+
+      const { error: enrErr } = await supabase
+        .from('campaign_enrollments')
+        .update({ status: 'active' })
+        .eq('campaign_id', id)
+        .eq('status', 'paused');
+      if (enrErr) throw enrErr;
+
+      alert("Sequence resumed successfully.");
+      window.location.reload();
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.resumeSequence' });
+      alert(`Failed to resume sequence: ${err.message}`);
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const handleDeleteSequence = async () => {
+    if (!id || !window.confirm("WARNING: Are you sure you want to permanently delete this sequence? All enrolled contacts, scheduled steps, and sequence history will be removed.")) return;
+    setStopping(true);
+    try {
+      await supabase.from('campaign_enrollments').delete().eq('campaign_id', id);
+      await supabase.from('campaign_steps').delete().eq('campaign_id', id);
+      const { error } = await supabase.from('marketing_campaigns').delete().eq('id', id);
+      if (error) throw error;
+
+      alert("Sequence deleted successfully.");
+      navigate('/marketing/sequences');
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.deleteSequence' });
+      alert(`Failed to delete sequence: ${err.message}`);
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleTagEnrollment = async (enrollmentId: string, tag: string, contactId: string) => {
     setTaggingId(enrollmentId);
     try {
@@ -403,13 +477,52 @@ export const CampaignDetailPage = () => {
         </div>
 
         {campaign.type === 'sequence' && (
-          <button 
-            className="btn btn--primary"
-            onClick={openEnrollModal}
-          >
-            <FiPlay style={{ marginRight: '0.4rem' }} />
-            {campaign.status === 'live' ? 'Enroll Contacts / Add Batch' : 'Activate Sequence'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {campaign.status === 'live' && (
+              <button 
+                className="btn"
+                style={{ background: '#dc2626', color: '#fff', border: 'none', display: 'inline-flex', alignItems: 'center' }}
+                onClick={handlePauseSequence}
+                disabled={stopping}
+                title="Stop and pause this sequence immediately"
+              >
+                <FiPause style={{ marginRight: '0.4rem' }} />
+                {stopping ? 'Stopping...' : 'Stop / Pause Sequence'}
+              </button>
+            )}
+
+            {campaign.status === 'paused' && (
+              <button 
+                className="btn"
+                style={{ background: '#16a34a', color: '#fff', border: 'none', display: 'inline-flex', alignItems: 'center' }}
+                onClick={handleResumeSequence}
+                disabled={stopping}
+                title="Resume this sequence"
+              >
+                <FiPlay style={{ marginRight: '0.4rem' }} />
+                {stopping ? 'Resuming...' : 'Resume Sequence'}
+              </button>
+            )}
+
+            <button 
+              className="btn btn--primary"
+              onClick={openEnrollModal}
+              disabled={stopping}
+            >
+              <FiPlay style={{ marginRight: '0.4rem' }} />
+              {campaign.status === 'live' ? 'Enroll Contacts / Add Batch' : 'Activate Sequence'}
+            </button>
+
+            <button 
+              className="btn"
+              style={{ background: 'transparent', color: '#ef4444', border: '1px solid #ef4444', display: 'inline-flex', alignItems: 'center' }}
+              onClick={handleDeleteSequence}
+              disabled={stopping}
+              title="Permanently delete this sequence"
+            >
+              <FiTrash2 style={{ marginRight: '0.4rem' }} /> Delete Sequence
+            </button>
+          </div>
         )}
       </div>
 
