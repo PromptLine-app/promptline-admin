@@ -11,6 +11,7 @@ export const CampaignsPage = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
+  const [newCampaignType, setNewCampaignType] = useState<'broadcast' | 'sequence'>('broadcast');
   const [creating, setCreating] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
 
@@ -91,12 +92,17 @@ export const CampaignsPage = () => {
     try {
       const { data, error } = await supabase
         .from('marketing_campaigns')
-        .insert({ name: newCampaignName, type: 'broadcast', status: 'draft' })
+        .insert({ name: newCampaignName, type: newCampaignType, status: 'draft' })
         .select()
         .single();
       
       if (error) throw error;
-      if (data) navigate(`/marketing/campaigns/${data.id}`);
+      if (data) {
+        setIsModalOpen(false);
+        setNewCampaignName('');
+        setNewCampaignType('broadcast');
+        navigate(`/marketing/campaigns/${data.id}`);
+      }
     } catch (err) {
       reportError(err, { where: 'CampaignsPage.create' });
       alert('Failed to create campaign');
@@ -273,25 +279,74 @@ export const CampaignsPage = () => {
 
       {/* New Campaign Modal */}
       {isModalOpen && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="page-card" style={{ width: 400, padding: '1.5rem', background: 'hsl(var(--background))' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>Create New Campaign</h2>
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="page-card" style={{ width: 520, padding: '2rem', background: 'hsl(var(--background))' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, marginBottom: '0.5rem' }}>Create New Campaign</h2>
+            <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '1.5rem' }}>Choose the campaign type and give it a name.</p>
             <form onSubmit={handleCreateCampaign}>
+              {/* Campaign Type Picker */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label" style={{ marginBottom: '0.75rem' }}>Campaign Type</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setNewCampaignType('broadcast')}
+                    style={{
+                      padding: '1rem',
+                      borderRadius: 10,
+                      border: `2px solid ${newCampaignType === 'broadcast' ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+                      background: newCampaignType === 'broadcast' ? 'hsl(var(--primary) / 0.08)' : 'hsl(var(--secondary))',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>📢</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.25rem', color: newCampaignType === 'broadcast' ? 'hsl(var(--primary))' : 'hsl(var(--foreground))' }}>Broadcast</div>
+                    <div className="text-muted" style={{ fontSize: '0.78rem', lineHeight: 1.4 }}>One-time email blast to a filtered audience segment.</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewCampaignType('sequence')}
+                    style={{
+                      padding: '1rem',
+                      borderRadius: 10,
+                      border: `2px solid ${newCampaignType === 'sequence' ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+                      background: newCampaignType === 'sequence' ? 'hsl(var(--primary) / 0.08)' : 'hsl(var(--secondary))',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>🔁</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.25rem', color: newCampaignType === 'sequence' ? 'hsl(var(--primary))' : 'hsl(var(--foreground))' }}>Sequence</div>
+                    <div className="text-muted" style={{ fontSize: '0.78rem', lineHeight: 1.4 }}>Multi-step drip campaign with scheduled follow-ups over days/weeks.</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Campaign Name */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label className="form-label">Campaign Name</label>
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="e.g., Q3 Customer Outreach" 
+                  placeholder={newCampaignType === 'broadcast' ? 'e.g., Q3 Customer Newsletter' : 'e.g., Lawn Care Cold Outreach'}
                   value={newCampaignName}
                   onChange={e => setNewCampaignName(e.target.value)}
                   autoFocus
                 />
+                <p className="text-muted" style={{ fontSize: '0.78rem', marginTop: '0.4rem' }}>
+                  {newCampaignType === 'broadcast'
+                    ? 'You will select your template and audience on the next screen.'
+                    : 'You will build the step sequence and then activate it on the next screen.'}
+                </p>
               </div>
+
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn--secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
+                <button type="button" className="btn btn--secondary" onClick={() => { setIsModalOpen(false); setNewCampaignName(''); setNewCampaignType('broadcast'); }}>Cancel</button>
                 <button type="submit" className="btn btn--primary" disabled={creating || !newCampaignName.trim()}>
-                  {creating ? 'Creating...' : 'Create Campaign'}
+                  {creating ? 'Creating...' : `Create ${newCampaignType === 'broadcast' ? 'Broadcast' : 'Sequence'} →`}
                 </button>
               </div>
             </form>
