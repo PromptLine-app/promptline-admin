@@ -23,8 +23,17 @@ export const CampaignDetailPage = () => {
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [selectedSender, setSelectedSender] = useState('');
   const [audienceFilter, setAudienceFilter] = useState('all'); // all, cold, warm, hot
+  const [audienceTag, setAudienceTag] = useState('all');
+  const [broadcastMode, setBroadcastMode] = useState<'batch' | 'select' | 'all'>('all');
+  const [broadcastBatchLimit, setBroadcastBatchLimit] = useState(100);
+  const [broadcastContacts, setBroadcastContacts] = useState<any[]>([]);
+  const [broadcastSelectedIds, setBroadcastSelectedIds] = useState<Set<string>>(new Set());
+  const [broadcastSearch, setBroadcastSearch] = useState('');
+  const [loadingBroadcastContacts, setLoadingBroadcastContacts] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [senders, setSenders] = useState<any[]>([]);
+  const [broadcastAvailableTags, setBroadcastAvailableTags] = useState<string[]>([]);
 
   // Sequence Builder State
   const [sequenceSteps, setSequenceSteps] = useState<any[]>([]);
@@ -107,16 +116,28 @@ export const CampaignDetailPage = () => {
       alert("Please select a template first.");
       return;
     }
+    if (broadcastMode === 'select' && broadcastSelectedIds.size === 0) {
+      alert("Please select at least one contact.");
+      return;
+    }
     
     setIsSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('marketing-launch-campaign', {
-        body: {
-          campaign_id: id,
-          audience_filter: audienceFilter,
-          template_id: selectedTemplate
-        }
-      });
+      const body: Record<string, unknown> = {
+        campaign_id: id,
+        audience_filter: audienceFilter,
+        tag_filter: audienceTag !== 'all' ? audienceTag : undefined,
+        template_id: selectedTemplate,
+        sender_id: selectedSender || undefined,
+      };
+
+      if (broadcastMode === 'batch') {
+        body.batch_limit = broadcastBatchLimit;
+      } else if (broadcastMode === 'select') {
+        body.contact_ids = Array.from(broadcastSelectedIds);
+      }
+
+      const { data, error } = await supabase.functions.invoke('marketing-launch-campaign', { body });
       
       if (error) {
         let msg = error.message;
@@ -129,8 +150,7 @@ export const CampaignDetailPage = () => {
         throw new Error(msg);
       }
       
-      alert(data?.message || "Broadcast launched successfully!");
-      // Reload page to reflect new status
+      alert(data?.message || `Broadcast launched! ${data?.contacts_enrolled ?? ''} contacts queued.`);
       window.location.reload();
     } catch (err: any) {
       reportError(err, { where: 'CampaignDetailPage.launch' });
@@ -188,6 +208,39 @@ export const CampaignDetailPage = () => {
     };
     fetchCandidates();
   }, [showActivateModal, activateTag, activateFilter, id, enrollments]);
+
+  // Fetch broadcast contacts reactively when filters change
+  useEffect(() => {
+    if (!id || !campaign || campaign.type !== 'broadcast' || campaign.status !== 'draft') return;
+    const fetchBroadcastContacts = async () => {
+      setLoadingBroadcastContacts(true);
+      try {
+        let q = supabase
+          .from('email_contacts')
+          .select('id, full_name, first_name, last_name, email, company, engagement_state, tags')
+          .eq('status', 'active')
+          .neq('engagement_state', 'suppressed');
+
+        if (audienceFilter === 'warm') q = q.eq('engagement_state', 'warm');
+        else if (audienceFilter === 'cold') q = q.eq('engagement_state', 'cold');
+        else if (audienceFilter === 'hot') q = q.eq('engagement_state', 'hot');
+
+        if (audienceTag && audienceTag !== 'all') {
+          q = q.contains('tags', [audienceTag]);
+        }
+
+        const { data, error } = await q;
+        if (error) throw error;
+        setBroadcastContacts(data || []);
+        setBroadcastSelectedIds(new Set());
+      } catch (err) {
+        reportError(err, { where: 'CampaignDetailPage.fetchBroadcastContacts' });
+      } finally {
+        setLoadingBroadcastContacts(false);
+      }
+    };
+    fetchBroadcastContacts();
+  }, [id, campaign?.status, campaign?.type, audienceFilter, audienceTag]);
 
   const handleActivateSequence = async () => {
     if (enrollMode === 'select' && selectedCandidateIds.size === 0) {
@@ -370,6 +423,20 @@ export const CampaignDetailPage = () => {
         setTemplates(tmplRes.data || []);
         setEnrollments(enrollRes.data || []);
 
+        // Fetch senders and tags in parallel
+        const [sendersRes, tagsRes] = await Promise.all([
+          supabase.from('email_senders').select('id, name, email').eq('is_active', true),
+          supabase.from('email_contacts').select('tags').not('tags', 'is', null).limit(500)
+        ]);
+        if (sendersRes.data) setSenders(sendersRes.data);
+        if (tagsRes.data) {
+          const tagSet = new Set<string>();
+          tagsRes.data.forEach((c: any) => { if (Array.isArray(c.tags)) c.tags.forEach((t: string) => tagSet.add(t)); });
+          const sortedTags = Array.from(tagSet).sort();
+          setAvailableTags(sortedTags);
+          setBroadcastAvailableTags(sortedTags);
+        }
+
         // Process enrollments
         let active = 0, completed = 0, suppressed = 0;
         const stepDist: Record<number, number> = {};
@@ -475,6 +542,41 @@ export const CampaignDetailPage = () => {
             </p>
           </div>
         </div>
+
+        {campaign.type === 'broadcast' && (
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {(campaign.status === 'sending' || campaign.status === 'sent') && (
+              <button 
+                className="btn"
+                style={{ background: '#dc2626', color: '#fff', border: 'none', display: 'inline-flex', alignItems: 'center' }}
+                onClick={handlePauseSequence}
+                disabled={stopping}
+              >
+                <FiPause style={{ marginRight: '0.4rem' }} />
+                {stopping ? 'Stopping...' : 'Stop Broadcast'}
+              </button>
+            )}
+            {campaign.status === 'paused' && (
+              <button 
+                className="btn"
+                style={{ background: '#16a34a', color: '#fff', border: 'none', display: 'inline-flex', alignItems: 'center' }}
+                onClick={handleResumeSequence}
+                disabled={stopping}
+              >
+                <FiPlay style={{ marginRight: '0.4rem' }} />
+                {stopping ? 'Resuming...' : 'Resume Broadcast'}
+              </button>
+            )}
+            <button 
+              className="btn"
+              style={{ background: 'transparent', color: '#ef4444', border: '1px solid #ef4444', display: 'inline-flex', alignItems: 'center' }}
+              onClick={handleDeleteSequence}
+              disabled={stopping}
+            >
+              <FiTrash2 style={{ marginRight: '0.4rem' }} /> Delete Broadcast
+            </button>
+          </div>
+        )}
 
         {campaign.type === 'sequence' && (
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -695,28 +797,18 @@ export const CampaignDetailPage = () => {
       )}
 
 
-      {/* Broadcast Setup UI (Phase 4) */}
+      {/* Broadcast Setup UI */}
       {campaign.status === 'draft' && campaign.type === 'broadcast' && (
         <div className="page-card" style={{ padding: '2rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <FiSend /> Broadcast Setup
           </h2>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
-            <div>
-              <label className="form-label">Target Audience</label>
-              <select className="form-input" value={audienceFilter} onChange={e => setAudienceFilter(e.target.value)}>
-                <option value="all">All Active Contacts</option>
-                <option value="warm">Warm Leads Only</option>
-                <option value="cold">Cold Leads Only</option>
-              </select>
-              <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>
-                Filter which contacts will receive this broadcast.
-              </p>
-            </div>
+          <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '1.75rem' }}>Configure your target audience and email template, then launch.</p>
 
+          {/* Row 1: Template + Sender */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
             <div>
-              <label className="form-label">Email Template</label>
+              <label className="form-label">Email Template *</label>
               <select className="form-input" value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
                 <option value="">— Select a template —</option>
                 {templates.map(t => (
@@ -724,19 +816,231 @@ export const CampaignDetailPage = () => {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="form-label">Send From (optional)</label>
+              <select className="form-input" value={selectedSender} onChange={e => setSelectedSender(e.target.value)}>
+                <option value="">— Round-robin (auto-assign) —</option>
+                {senders.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} &lt;{s.email}&gt;</option>
+                ))}
+              </select>
+              <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.4rem' }}>Leave blank to auto-rotate across all active mailboxes.</p>
+            </div>
           </div>
 
-          <div style={{ padding: '1.5rem', background: 'hsl(var(--secondary))', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* Row 2: Audience Filters */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
             <div>
-              <h4 style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Ready to Blast?</h4>
-              <p className="text-muted" style={{ fontSize: '0.875rem' }}>
-                This will queue the broadcast for your selected audience.
+              <label className="form-label">Engagement State</label>
+              <select className="form-input" value={audienceFilter} onChange={e => setAudienceFilter(e.target.value)}>
+                <option value="all">All Active Contacts</option>
+                <option value="warm">Warm Leads Only</option>
+                <option value="cold">Cold Leads Only</option>
+                <option value="hot">Hot Leads Only</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Target Tag / Niche</label>
+              <select className="form-input" value={audienceTag} onChange={e => setAudienceTag(e.target.value)}>
+                <option value="all">All Tags (No filter)</option>
+                {broadcastAvailableTags.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Candidate Count */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.9rem', background: 'hsl(var(--secondary) / 0.5)', borderRadius: 8, marginBottom: '1.25rem', fontSize: '0.85rem' }}>
+            <span>Matching contacts available:</span>
+            <span style={{ fontWeight: 700, color: 'hsl(var(--primary))' }}>
+              {loadingBroadcastContacts ? 'Calculating...' : `${broadcastContacts.length} contacts`}
+            </span>
+          </div>
+
+          {/* Enrollment Strategy Tabs */}
+          <label className="form-label" style={{ marginBottom: '0.5rem' }}>Send Strategy</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
+            <button
+              type="button"
+              className={`btn ${broadcastMode === 'all' ? 'btn--primary' : 'btn--secondary'}`}
+              style={{ padding: '0.5rem 0.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+              onClick={() => setBroadcastMode('all')}
+            >
+              <FiUsers /> All ({broadcastContacts.length})
+            </button>
+            <button
+              type="button"
+              className={`btn ${broadcastMode === 'batch' ? 'btn--primary' : 'btn--secondary'}`}
+              style={{ padding: '0.5rem 0.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+              onClick={() => setBroadcastMode('batch')}
+            >
+              <FiSliders /> Batch Limit
+            </button>
+            <button
+              type="button"
+              className={`btn ${broadcastMode === 'select' ? 'btn--primary' : 'btn--secondary'}`}
+              style={{ padding: '0.5rem 0.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+              onClick={() => setBroadcastMode('select')}
+            >
+              <FiCheckSquare /> Hand-pick ({broadcastSelectedIds.size})
+            </button>
+          </div>
+
+          {/* Mode: Batch */}
+          {broadcastMode === 'batch' && (
+            <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', border: '1px solid hsl(var(--border))' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Send to first N contacts</span>
+                <span className="text-muted" style={{ fontSize: '0.75rem' }}>Useful for staged rollouts</span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={broadcastContacts.length || 10000}
+                  value={broadcastBatchLimit}
+                  onChange={e => setBroadcastBatchLimit(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="form-input"
+                  style={{ width: 100, textAlign: 'center', fontWeight: 700, fontSize: '1rem' }}
+                />
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  {[50, 100, 250, 500].map(size => (
+                    <button
+                      key={size}
+                      type="button"
+                      className="btn btn--secondary"
+                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: broadcastBatchLimit === size ? 700 : 500 }}
+                      onClick={() => setBroadcastBatchLimit(size)}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                Will send to <strong>{Math.min(broadcastBatchLimit, broadcastContacts.length)}</strong> contacts.
+              </p>
+            </div>
+          )}
+
+          {/* Mode: Hand-pick */}
+          {broadcastMode === 'select' && (
+            <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '0.85rem', marginBottom: '1.25rem', border: '1px solid hsl(var(--border))' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ width: '100%', paddingLeft: '2rem', fontSize: '0.8rem' }}
+                    placeholder="Search by name, company, email..."
+                    value={broadcastSearch}
+                    onChange={e => setBroadcastSearch(e.target.value)}
+                  />
+                  <FiSearch style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted-foreground))' }} />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                  onClick={() => {
+                    const next = new Set(broadcastSelectedIds);
+                    broadcastContacts
+                      .filter(c => {
+                        if (!broadcastSearch) return true;
+                        const q = broadcastSearch.toLowerCase();
+                        return (c.full_name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q) || (c.company || '').toLowerCase().includes(q);
+                      })
+                      .forEach(c => next.add(c.id));
+                    setBroadcastSelectedIds(next);
+                  }}
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                  onClick={() => setBroadcastSelectedIds(new Set())}
+                >
+                  Clear
+                </button>
+              </div>
+              <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid hsl(var(--border))', borderRadius: 6, background: 'hsl(var(--background))' }}>
+                {loadingBroadcastContacts ? (
+                  <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }} className="text-muted">Loading contacts...</div>
+                ) : broadcastContacts.length === 0 ? (
+                  <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }} className="text-muted">No contacts match the current filters.</div>
+                ) : (
+                  broadcastContacts
+                    .filter(c => {
+                      if (!broadcastSearch) return true;
+                      const q = broadcastSearch.toLowerCase();
+                      return (c.full_name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q) || (c.company || '').toLowerCase().includes(q);
+                    })
+                    .map(c => {
+                      const isSel = broadcastSelectedIds.has(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '0.6rem',
+                            padding: '0.45rem 0.75rem', borderBottom: '1px solid hsl(var(--border))',
+                            cursor: 'pointer',
+                            background: isSel ? 'hsl(var(--primary) / 0.08)' : 'transparent',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSel}
+                            onChange={() => {
+                              const next = new Set(broadcastSelectedIds);
+                              if (isSel) next.delete(c.id); else next.add(c.id);
+                              setBroadcastSelectedIds(next);
+                            }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontWeight: 600 }}>{c.first_name || c.full_name}</span>
+                            {c.company && <span className="text-muted" style={{ marginLeft: '0.5rem' }}>· {c.company}</span>}
+                            <span className="text-muted" style={{ display: 'block', fontSize: '0.72rem' }}>{c.email}</span>
+                          </div>
+                          <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: 999, background: 'hsl(var(--secondary))' }} className="text-muted">{c.engagement_state}</span>
+                        </label>
+                      );
+                    })
+                )}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem', fontSize: '0.75rem' }} className="text-muted">
+                <span>{broadcastSelectedIds.size} selected</span>
+                <span>{broadcastContacts.length} total matching</span>
+              </div>
+            </div>
+          )}
+
+          {/* Mode: All */}
+          {broadcastMode === 'all' && broadcastContacts.length > 0 && (
+            <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', border: '1px solid hsl(var(--border))' }}>
+              <p style={{ margin: 0, fontSize: '0.85rem' }}>
+                Will send to all <strong>{broadcastContacts.length}</strong> contacts matching the current filters.
+              </p>
+            </div>
+          )}
+
+          {/* Launch Row */}
+          <div style={{ paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontWeight: 600, marginBottom: '0.2rem' }}>Ready to Send?</p>
+              <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+                {broadcastMode === 'all' ? `Sending to ${broadcastContacts.length} contacts` :
+                 broadcastMode === 'batch' ? `Sending to ${Math.min(broadcastBatchLimit, broadcastContacts.length)} contacts` :
+                 `Sending to ${broadcastSelectedIds.size} selected contacts`}
               </p>
             </div>
             <button 
               className="btn btn--primary" 
               onClick={handleLaunchBroadcast}
-              disabled={isSending || !selectedTemplate}
+              disabled={isSending || !selectedTemplate || (broadcastMode === 'select' && broadcastSelectedIds.size === 0)}
             >
               <FiSend style={{ marginRight: '0.5rem' }} /> {isSending ? 'Launching...' : 'Launch Broadcast'}
             </button>
@@ -773,11 +1077,7 @@ export const CampaignDetailPage = () => {
                     <label className="form-label">Target Tag (Niche / List)</label>
                     <select className="form-input" value={activateTag} onChange={e => setActivateTag(e.target.value)}>
                       <option value="all">All Tags (No tag filter)</option>
-                      <option value="lawn-care">🌱 lawn-care</option>
-                      <option value="hvac-plumbing">🔧 hvac-plumbing</option>
-                      <option value="cedar-rapids-ia">📍 cedar-rapids-ia</option>
-                      <option value="charlotte-nc">📍 charlotte-nc</option>
-                      {availableTags.filter(t => !['lawn-care', 'hvac-plumbing', 'cedar-rapids-ia', 'charlotte-nc', 'csv-import'].includes(t)).map(t => (
+                      {availableTags.filter(t => t !== 'csv-import').map(t => (
                         <option key={t} value={t}>{t}</option>
                       ))}
                     </select>
