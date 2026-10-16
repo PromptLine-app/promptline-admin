@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiSend, FiFileText, FiPlus, FiMoreVertical } from 'react-icons/fi';
+import { FiSend, FiFileText, FiPlus, FiTrash2, FiPause, FiPlay } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
 
@@ -12,6 +12,77 @@ export const CampaignsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
+
+  const fetchCampaigns = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('marketing_campaigns')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCampaigns(data || []);
+    } catch (err) {
+      reportError(err, { where: 'CampaignsPage' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCampaigns();
+  }, []);
+
+  const handleDeleteCampaign = async (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to permanently delete campaign "${name}"? All enrollments and steps will be deleted.`)) return;
+    setActionId(id);
+    try {
+      await supabase.from('campaign_enrollments').delete().eq('campaign_id', id);
+      await supabase.from('campaign_steps').delete().eq('campaign_id', id);
+      const { error } = await supabase.from('marketing_campaigns').delete().eq('id', id);
+      if (error) throw error;
+      await fetchCampaigns();
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignsPage.delete' });
+      alert(`Failed to delete campaign: ${err.message}`);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handlePauseCampaign = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to stop/pause this campaign?")) return;
+    setActionId(id);
+    try {
+      await supabase.from('marketing_campaigns').update({ status: 'paused', updated_at: new Date().toISOString() }).eq('id', id);
+      await supabase.from('campaign_enrollments').update({ status: 'paused' }).eq('campaign_id', id).eq('status', 'active');
+      await fetchCampaigns();
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignsPage.pause' });
+      alert(`Failed to pause campaign: ${err.message}`);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleResumeCampaign = async (id: string, isSequence: boolean, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActionId(id);
+    try {
+      const nextStatus = isSequence ? 'live' : 'sending';
+      await supabase.from('marketing_campaigns').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', id);
+      await supabase.from('campaign_enrollments').update({ status: 'active' }).eq('campaign_id', id).eq('status', 'paused');
+      await fetchCampaigns();
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignsPage.resume' });
+      alert(`Failed to resume campaign: ${err.message}`);
+    } finally {
+      setActionId(null);
+    }
+  };
 
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,25 +104,6 @@ export const CampaignsPage = () => {
       setCreating(false);
     }
   };
-
-  useEffect(() => {
-    const fetchCampaigns = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('marketing_campaigns')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setCampaigns(data || []);
-      } catch (err) {
-        reportError(err, { where: 'CampaignsPage' });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCampaigns();
-  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -119,7 +171,7 @@ export const CampaignsPage = () => {
                 <th>Status</th>
                 <th>Sent</th>
                 <th>Created At</th>
-                <th></th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -143,9 +195,74 @@ export const CampaignsPage = () => {
                   <td style={{ fontWeight: 500 }}>{camp.total_sent.toLocaleString()}</td>
                   <td className="text-muted">{new Date(camp.created_at).toLocaleDateString()}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn--secondary" style={{ padding: '0.4rem' }}>
-                      <FiMoreVertical />
-                    </button>
+                    <div style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {(camp.status === 'live' || camp.status === 'sending') && (
+                        <button
+                          className="btn"
+                          style={{
+                            background: '#dc2626',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.8rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                          disabled={actionId === camp.id}
+                          onClick={(e) => handlePauseCampaign(camp.id, e)}
+                          title="Stop / Pause Campaign"
+                        >
+                          <FiPause /> Stop
+                        </button>
+                      )}
+
+                      {camp.status === 'paused' && (
+                        <button
+                          className="btn"
+                          style={{
+                            background: '#16a34a',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.8rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                          disabled={actionId === camp.id}
+                          onClick={(e) => handleResumeCampaign(camp.id, camp.type === 'sequence', e)}
+                          title="Resume Campaign"
+                        >
+                          <FiPlay /> Resume
+                        </button>
+                      )}
+
+                      <button
+                        className="btn"
+                        style={{
+                          background: 'transparent',
+                          color: '#ef4444',
+                          border: '1px solid #ef4444',
+                          padding: '0.35rem 0.65rem',
+                          fontSize: '0.8rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                        disabled={actionId === camp.id}
+                        onClick={(e) => handleDeleteCampaign(camp.id, camp.name, e)}
+                        title="Delete Campaign"
+                      >
+                        <FiTrash2 /> Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
