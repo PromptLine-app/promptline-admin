@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiFileText, FiPlus, FiMoreVertical } from 'react-icons/fi';
+import { FiFileText, FiPlus, FiMoreVertical, FiPlay, FiPause, FiTrash2 } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
 
@@ -12,26 +12,77 @@ export const SequencesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSeqName, setNewSeqName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
+
+  const fetchSequences = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('marketing_campaigns')
+        .select('*')
+        .eq('type', 'sequence')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSequences(data || []);
+    } catch (err) {
+      reportError(err, { where: 'SequencesPage' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchSequences = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('marketing_campaigns')
-          .select('*')
-          .eq('type', 'sequence')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setSequences(data || []);
-      } catch (err) {
-        reportError(err, { where: 'SequencesPage' });
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchSequences();
   }, []);
+
+  const handlePauseSequence = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to stop/pause this sequence? All scheduled sends will immediately stop.")) return;
+    setActionId(id);
+    try {
+      await supabase.from('marketing_campaigns').update({ status: 'paused', updated_at: new Date().toISOString() }).eq('id', id);
+      await supabase.from('campaign_enrollments').update({ status: 'paused' }).eq('campaign_id', id).eq('status', 'active');
+      await fetchSequences();
+    } catch (err) {
+      reportError(err, { where: 'SequencesPage.pause' });
+      alert('Failed to pause sequence');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleResumeSequence = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActionId(id);
+    try {
+      await supabase.from('marketing_campaigns').update({ status: 'live', updated_at: new Date().toISOString() }).eq('id', id);
+      await supabase.from('campaign_enrollments').update({ status: 'active' }).eq('campaign_id', id).eq('status', 'paused');
+      await fetchSequences();
+    } catch (err) {
+      reportError(err, { where: 'SequencesPage.resume' });
+      alert('Failed to resume sequence');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleDeleteSequence = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("WARNING: Are you sure you want to permanently delete this sequence? All enrollments and steps will be deleted.")) return;
+    setActionId(id);
+    try {
+      await supabase.from('campaign_enrollments').delete().eq('campaign_id', id);
+      await supabase.from('campaign_steps').delete().eq('campaign_id', id);
+      const { error } = await supabase.from('marketing_campaigns').delete().eq('id', id);
+      if (error) throw error;
+      await fetchSequences();
+    } catch (err) {
+      reportError(err, { where: 'SequencesPage.delete' });
+      alert('Failed to delete sequence');
+    } finally {
+      setActionId(null);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,7 +166,7 @@ export const SequencesPage = () => {
                 <th>Status</th>
                 <th>Contacts Enrolled</th>
                 <th>Created At</th>
-                <th></th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -131,9 +182,74 @@ export const SequencesPage = () => {
                   <td style={{ fontWeight: 500 }}>{seq.total_sent.toLocaleString()}</td>
                   <td className="text-muted">{new Date(seq.created_at).toLocaleDateString()}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn--secondary" style={{ padding: '0.4rem' }}>
-                      <FiMoreVertical />
-                    </button>
+                    <div style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {seq.status === 'live' && (
+                        <button
+                          className="btn"
+                          style={{
+                            background: '#dc2626',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.8rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                          disabled={actionId === seq.id}
+                          onClick={(e) => handlePauseSequence(seq.id, e)}
+                          title="Stop / Pause Sequence"
+                        >
+                          <FiPause /> Stop
+                        </button>
+                      )}
+
+                      {seq.status === 'paused' && (
+                        <button
+                          className="btn"
+                          style={{
+                            background: '#16a34a',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.8rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                          disabled={actionId === seq.id}
+                          onClick={(e) => handleResumeSequence(seq.id, e)}
+                          title="Resume Sequence"
+                        >
+                          <FiPlay /> Resume
+                        </button>
+                      )}
+
+                      <button
+                        className="btn"
+                        style={{
+                          background: 'transparent',
+                          color: '#ef4444',
+                          border: '1px solid #ef4444',
+                          padding: '0.35rem 0.65rem',
+                          fontSize: '0.8rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                        disabled={actionId === seq.id}
+                        onClick={(e) => handleDeleteSequence(seq.id, e)}
+                        title="Delete Sequence"
+                      >
+                        <FiTrash2 /> Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
