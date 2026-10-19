@@ -8,7 +8,7 @@ import { reportError } from '@/lib/sentry';
 import type { EmailContact } from '@/types/domain';
 import {
   FiRefreshCw, FiUpload, FiDownload,
-  FiX, FiCheck, FiAlertCircle, FiExternalLink, FiTag, FiPlay,
+  FiX, FiCheck, FiAlertCircle, FiExternalLink, FiTag, FiPlay, FiUserPlus, FiPlus,
 } from 'react-icons/fi';
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -69,13 +69,18 @@ export const ContactsPage = () => {
   const [selectedSequenceId, setSelectedSequenceId] = useState('');
   const [enrolling, setEnrolling] = useState(false);
 
-  // Single Contact Edit Modal
-  const [editingContact, setEditingContact] = useState<EmailContact | null>(null);
+  // Single Contact Add / Edit Modal
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [isNewContact, setIsNewContact] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editCompany, setEditCompany] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editWebsite, setEditWebsite] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editState, setEditState] = useState('');
   const [editTags, setEditTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [savingContact, setSavingContact] = useState(false);
@@ -455,56 +460,122 @@ export const ContactsPage = () => {
     }
   };
 
+  const openAddContactModal = () => {
+    setIsNewContact(true);
+    setEditingContactId(null);
+    setEditFirstName('');
+    setEditLastName('');
+    setEditEmail('');
+    setEditCompany('');
+    setEditPhone('');
+    setEditWebsite('');
+    setEditCity('');
+    setEditState('');
+    setEditTags(['manual']);
+    setNewTagInput('');
+    setShowContactModal(true);
+  };
+
   const openEditContactModal = (c: EmailContact) => {
-    setEditingContact(c);
+    setIsNewContact(false);
+    setEditingContactId(c.id);
     setEditFirstName(c.first_name || '');
     setEditLastName(c.last_name || '');
     setEditEmail(c.email || '');
     setEditCompany(c.company || '');
     setEditPhone(c.phone || '');
+    setEditWebsite(c.website || '');
+    setEditCity(c.city || '');
+    setEditState(c.state || '');
     setEditTags(Array.isArray(c.tags) ? [...c.tags] : []);
     setNewTagInput('');
+    setShowContactModal(true);
   };
 
   const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingContact) return;
-    if (!editEmail.trim()) { toast('Email cannot be empty', 'error'); return; }
+    const cleanEmail = editEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      toast('Please enter a valid email address', 'error');
+      return;
+    }
 
     setSavingContact(true);
     try {
-      const fullName = [editFirstName.trim(), editLastName.trim()].filter(Boolean).join(' ') || editingContact.full_name;
-      const { error } = await supabase
-        .from('email_contacts')
-        .update({
+      const fullName = [editFirstName.trim(), editLastName.trim()].filter(Boolean).join(' ') || (editFirstName.trim() || 'Unknown');
+
+      if (isNewContact) {
+        // Check local contacts first to avoid duplicate errors
+        const existing = contacts.find(c => c.email.toLowerCase() === cleanEmail);
+        if (existing) {
+          toast(`A contact with email ${cleanEmail} already exists!`, 'error');
+          setSavingContact(false);
+          return;
+        }
+
+        const payload = {
+          email: cleanEmail,
           first_name: editFirstName.trim() || null,
           last_name: editLastName.trim() || null,
           full_name: fullName,
-          email: editEmail.trim(),
           company: editCompany.trim() || null,
           phone: editPhone.trim() || null,
+          website: editWebsite.trim() || null,
+          city: editCity.trim() || null,
+          state: editState.trim() || null,
+          lead_source: 'manual',
+          status: 'active',
+          engagement_state: 'warm',
+          tags: editTags,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await supabase
+          .from('email_contacts')
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        toast('Contact added successfully!', 'success');
+        setContacts(prev => [data as EmailContact, ...prev]);
+        setShowContactModal(false);
+      } else {
+        if (!editingContactId) return;
+
+        const updatePayload = {
+          first_name: editFirstName.trim() || null,
+          last_name: editLastName.trim() || null,
+          full_name: fullName,
+          email: cleanEmail,
+          company: editCompany.trim() || null,
+          phone: editPhone.trim() || null,
+          website: editWebsite.trim() || null,
+          city: editCity.trim() || null,
+          state: editState.trim() || null,
           tags: editTags,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingContact.id);
+        };
 
-      if (error) throw error;
+        const { error } = await supabase
+          .from('email_contacts')
+          .update(updatePayload)
+          .eq('id', editingContactId);
 
-      toast('Contact updated successfully!', 'success');
-      setContacts(prev => prev.map(c => c.id === editingContact.id ? {
-        ...c,
-        first_name: editFirstName.trim() || null,
-        last_name: editLastName.trim() || null,
-        full_name: fullName,
-        email: editEmail.trim(),
-        company: editCompany.trim() || null,
-        phone: editPhone.trim() || null,
-        tags: editTags,
-      } : c));
-      setEditingContact(null);
+        if (error) throw error;
+
+        toast('Contact updated successfully!', 'success');
+        setContacts(prev => prev.map(c => c.id === editingContactId ? {
+          ...c,
+          ...updatePayload,
+        } : c));
+        setShowContactModal(false);
+      }
     } catch (err: any) {
       reportError(err, { where: 'ContactsPage.handleSaveContact' });
-      toast(err.message || 'Failed to update contact', 'error');
+      toast(err.message || 'Failed to save contact', 'error');
     } finally {
       setSavingContact(false);
     }
@@ -707,6 +778,7 @@ export const ContactsPage = () => {
         subtitle={`${contacts.length.toLocaleString()} total contacts`}
         actions={
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="btn btn--primary btn--sm" onClick={openAddContactModal}><FiUserPlus style={{ marginRight: '0.3rem' }} /> Add Contact</button>
             <button className="btn btn--secondary btn--sm" onClick={syncCalculatorLeads} disabled={syncing}><FiRefreshCw style={{ marginRight: '0.3rem' }} /> Sync Calculator Leads</button>
             <button className="btn btn--secondary btn--sm" onClick={syncContactRequests} disabled={syncing}><FiRefreshCw style={{ marginRight: '0.3rem' }} /> Sync Contact Requests</button>
             <button className="btn btn--secondary btn--sm" onClick={() => fileInputRef.current?.click()}><FiUpload style={{ marginRight: '0.3rem' }} /> Import CSV</button>
@@ -952,15 +1024,16 @@ export const ContactsPage = () => {
         </div>
       )}
 
-      {/* Edit Single Contact Modal */}
-      {editingContact && (
-        <div className="modal-backdrop" onClick={() => setEditingContact(null)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+      {/* Add / Edit Single Contact Modal */}
+      {showContactModal && (
+        <div className="modal-backdrop" onClick={() => setShowContactModal(false)}>
+          <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FiTag /> Edit Contact & Tags
+                {isNewContact ? <FiUserPlus /> : <FiTag />}
+                {isNewContact ? 'Add Contact Manually' : 'Edit Contact & Tags'}
               </h3>
-              <button className="icon-button" onClick={() => setEditingContact(null)}><FiX /></button>
+              <button className="icon-button" onClick={() => setShowContactModal(false)}><FiX /></button>
             </div>
 
             <form onSubmit={handleSaveContact}>
@@ -971,7 +1044,7 @@ export const ContactsPage = () => {
                     className="form-input"
                     value={editFirstName}
                     onChange={e => setEditFirstName(e.target.value)}
-                    placeholder="First Name"
+                    placeholder="e.g. John"
                   />
                 </div>
                 <div>
@@ -980,46 +1053,83 @@ export const ContactsPage = () => {
                     className="form-input"
                     value={editLastName}
                     onChange={e => setEditLastName(e.target.value)}
-                    placeholder="Last Name"
+                    placeholder="e.g. Smith"
                   />
                 </div>
               </div>
 
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label className="form-label">Email *</label>
-                <input
-                  type="email"
-                  required
-                  className="form-input"
-                  value={editEmail}
-                  onChange={e => setEditEmail(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <div>
+                  <label className="form-label">Email *</label>
+                  <input
+                    type="email"
+                    required
+                    className="form-input"
+                    placeholder="john@example.com"
+                    value={editEmail}
+                    onChange={e => setEditEmail(e.target.value)}
+                  />
+                </div>
                 <div>
                   <label className="form-label">Company</label>
                   <input
                     className="form-input"
                     value={editCompany}
                     onChange={e => setEditCompany(e.target.value)}
-                    placeholder="Company name"
+                    placeholder="e.g. ABC Plumbing"
                   />
                 </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                 <div>
                   <label className="form-label">Phone</label>
                   <input
                     className="form-input"
                     value={editPhone}
                     onChange={e => setEditPhone(e.target.value)}
-                    placeholder="Phone"
+                    placeholder="(555) 000-0000"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Website</label>
+                  <input
+                    className="form-input"
+                    value={editWebsite}
+                    onChange={e => setEditWebsite(e.target.value)}
+                    placeholder="e.g. abcplumbing.com"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <label className="form-label">City</label>
+                  <input
+                    className="form-input"
+                    value={editCity}
+                    onChange={e => setEditCity(e.target.value)}
+                    placeholder="e.g. Charlotte"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">State</label>
+                  <input
+                    className="form-input"
+                    value={editState}
+                    onChange={e => setEditState(e.target.value)}
+                    placeholder="e.g. NC"
                   />
                 </div>
               </div>
 
               {/* Tags Section */}
-              <div style={{ marginBottom: '1.25rem', padding: '0.75rem', background: 'hsl(var(--secondary) / 0.5)', borderRadius: 8 }}>
-                <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Tags</label>
+              <div style={{ marginBottom: '1.25rem', padding: '0.85rem', background: 'hsl(var(--secondary) / 0.5)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <label className="form-label" style={{ fontWeight: 600, margin: 0 }}>Tags</label>
+                  <span className="text-muted" style={{ fontSize: '0.7rem' }}>Sequence &amp; city routing</span>
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                   {editTags.map(t => (
                     <span
@@ -1047,11 +1157,42 @@ export const ContactsPage = () => {
                   {editTags.length === 0 && <span className="text-muted" style={{ fontSize: '0.75rem' }}>No tags assigned</span>}
                 </div>
 
+                {/* Common suggested tags */}
+                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.6rem' }}>
+                  {['lawn-care', 'hvac-plumbing', 'charlotte-nc', 'cedar-rapids-ia', 'sequence-a', 'sequence-b'].map(tag => {
+                    const hasTag = editTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        style={{
+                          fontSize: '0.68rem',
+                          padding: '0.15rem 0.4rem',
+                          borderRadius: 4,
+                          border: hasTag ? '1px solid hsl(var(--primary))' : '1px dashed hsl(var(--border))',
+                          background: hasTag ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+                          color: hasTag ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => {
+                          if (hasTag) {
+                            setEditTags(editTags.filter(t => t !== tag));
+                          } else {
+                            setEditTags([...editTags, tag]);
+                          }
+                        }}
+                      >
+                        {hasTag ? `✓ ${tag}` : `+ ${tag}`}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.4rem' }}>
                   <input
                     className="form-input"
                     style={{ fontSize: '0.8rem' }}
-                    placeholder="Add a new tag (e.g. held-back, charlotte-nc)..."
+                    placeholder="Add custom tag (e.g. held-back, vip)..."
                     value={newTagInput}
                     onChange={e => setNewTagInput(e.target.value)}
                     onKeyDown={e => {
@@ -1085,7 +1226,7 @@ export const ContactsPage = () => {
                 <button
                   type="button"
                   className="btn btn--secondary"
-                  onClick={() => setEditingContact(null)}
+                  onClick={() => setShowContactModal(false)}
                 >
                   Cancel
                 </button>
@@ -1094,7 +1235,7 @@ export const ContactsPage = () => {
                   className="btn btn--primary"
                   disabled={savingContact || !editEmail}
                 >
-                  {savingContact ? 'Saving…' : 'Save Changes'}
+                  {savingContact ? 'Saving…' : (isNewContact ? 'Add Contact' : 'Save Changes')}
                 </button>
               </div>
             </form>
