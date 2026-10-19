@@ -60,6 +60,106 @@ export const CampaignDetailPage = () => {
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [taggingId, setTaggingId] = useState<string | null>(null);
 
+  // Test Send State
+  const [testSendModalOpen, setTestSendModalOpen] = useState(false);
+  const [testTargetStep, setTestTargetStep] = useState<any | null>(null);
+  const [testRecipientEmail, setTestRecipientEmail] = useState('');
+  const [testSenderId, setTestSenderId] = useState('');
+  const [testSending, setTestSending] = useState(false);
+  const [testSuccessMessage, setTestSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) {
+        setTestRecipientEmail(data.user.email);
+      }
+    });
+  }, []);
+
+  const openTestSendForStep = (step: any) => {
+    setTestTargetStep(step);
+    setTestSuccessMessage(null);
+    if (!testSenderId && senders.length > 0) {
+      setTestSenderId(senders[0].id);
+    }
+    setTestSendModalOpen(true);
+  };
+
+  const openTestSendForBroadcast = () => {
+    if (!selectedTemplate) {
+      alert("Please select an email template first before sending a test.");
+      return;
+    }
+    setTestTargetStep(null);
+    setTestSuccessMessage(null);
+    if (selectedSender) {
+      setTestSenderId(selectedSender);
+    } else if (!testSenderId && senders.length > 0) {
+      setTestSenderId(senders[0].id);
+    }
+    setTestSendModalOpen(true);
+  };
+
+  const handleExecuteTestSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testRecipientEmail || !testRecipientEmail.includes('@')) {
+      alert("Please enter a valid recipient email address for the test.");
+      return;
+    }
+
+    setTestSending(true);
+    setTestSuccessMessage(null);
+    try {
+      const isSequence = campaign?.type === 'sequence';
+      const body: Record<string, unknown> = {
+        recipient_email: testRecipientEmail.trim(),
+        recipient_name: 'Mike',
+        is_test: true,
+        variables: {
+          '{{first_name}}': 'Mike',
+          '{{name}}': 'Mike',
+          '{{company}}': 'Ridgeline Heating & Air',
+        },
+      };
+
+      if (testSenderId) {
+        body.sender_id = testSenderId;
+      } else {
+        body.email_type = 'marketing';
+      }
+
+      if (testTargetStep) {
+        body.is_cold_sequence = true;
+        body.custom_subject = testTargetStep.subject;
+        body.custom_body_html = testTargetStep.body_html;
+        if (testTargetStep.template_id) body.template_id = testTargetStep.template_id;
+      } else {
+        body.template_id = selectedTemplate;
+        body.is_cold_sequence = false;
+      }
+
+      const { data, error } = await supabase.functions.invoke('send-marketing-email', { body });
+
+      if (error) {
+        let msg = error.message;
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const errBody = await error.context.json();
+            if (errBody?.error) msg = errBody.error + (errBody.details ? `: ${JSON.stringify(errBody.details)}` : '');
+          }
+        } catch (_) {}
+        throw new Error(msg);
+      }
+
+      setTestSuccessMessage(`Test email successfully sent to ${testRecipientEmail}! (From: ${data?.sender || 'sender'})`);
+    } catch (err: any) {
+      reportError(err, { where: 'CampaignDetailPage.executeTestSend' });
+      alert(`Test send failed: ${err.message}`);
+    } finally {
+      setTestSending(false);
+    }
+  };
+
 
   const handleAddStep = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,6 +294,8 @@ export const CampaignDetailPage = () => {
         const enrolledSet = new Set(enrollments.map(e => e.contact_id));
         const eligible = (data || []).filter((c: any) => {
           if (enrolledSet.has(c.id)) return false;
+          const tags = Array.isArray(c.tags) ? c.tags : [];
+          if (tags.includes('held-back') || tags.includes('held-back-17-oct') || tags.includes('do-not-contact')) return false;
           const fn = (c.first_name ?? '').trim() || (c.full_name ?? '').trim().split(/\s+/)[0];
           return fn.length > 0 && fn.toLowerCase() !== 'unknown' && (c.company ?? '').trim().length > 0;
         });
@@ -425,7 +527,7 @@ export const CampaignDetailPage = () => {
 
         // Fetch senders and tags in parallel
         const [sendersRes, tagsRes] = await Promise.all([
-          supabase.from('email_senders').select('id, name, email').eq('is_active', true),
+          supabase.from('marketing_senders').select('id, display_name, email').eq('is_active', true),
           supabase.from('email_contacts').select('tags').not('tags', 'is', null).limit(500)
         ]);
         if (sendersRes.data) setSenders(sendersRes.data);
@@ -677,15 +779,17 @@ export const CampaignDetailPage = () => {
       )}
 
       {/* Sequence Builder UI (Phase 4) */}
-      {campaign.status === 'draft' && campaign.type === 'sequence' && (
+      {campaign.type === 'sequence' && (
         <div className="page-card" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiClock /> Sequence Workflow Builder
+              <FiClock /> {campaign.status === 'draft' ? 'Sequence Workflow Builder' : 'Sequence Workflow Steps'}
             </h2>
-            <button className="btn btn--primary" onClick={() => setShowStepModal(true)}>
-              + Add Step
-            </button>
+            {campaign.status === 'draft' && (
+              <button className="btn btn--primary" onClick={() => setShowStepModal(true)}>
+                + Add Step
+              </button>
+            )}
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative' }}>
@@ -700,15 +804,33 @@ export const CampaignDetailPage = () => {
                     <div>
                       <h4 style={{ fontWeight: 600 }}>Step {step.step_number}: Email Send</h4>
                       <p className="text-muted" style={{ fontSize: '0.875rem' }}>Template: {step.email_templates?.name || 'Unknown Template'}</p>
+                      {step.subject && (
+                        <p className="text-muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                          Subject: <em>{step.subject}</em>
+                        </p>
+                      )}
                     </div>
-                    <button 
-                      type="button" 
-                      className="btn btn--secondary" 
-                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', color: 'hsl(var(--destructive))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                      onClick={() => handleDeleteStep(step.id)}
-                    >
-                      <FiTrash2 /> Remove
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <button 
+                        type="button" 
+                        className="btn btn--secondary" 
+                        style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                        onClick={() => openTestSendForStep(step)}
+                        title="Send a test email for this step to verify merge fields and copy"
+                      >
+                        <FiSend size={12} /> Send Test Email
+                      </button>
+                      {campaign.status === 'draft' && (
+                        <button 
+                          type="button" 
+                          className="btn btn--secondary" 
+                          style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', color: 'hsl(var(--destructive))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          onClick={() => handleDeleteStep(step.id)}
+                        >
+                          <FiTrash2 size={12} /> Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {index < sequenceSteps.length - 1 && (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -724,7 +846,7 @@ export const CampaignDetailPage = () => {
             )}
           </div>
           
-          {sequenceSteps.length > 0 && (
+          {campaign.status === 'draft' && sequenceSteps.length > 0 && (
             <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 className="btn btn--primary"
@@ -821,7 +943,7 @@ export const CampaignDetailPage = () => {
               <select className="form-input" value={selectedSender} onChange={e => setSelectedSender(e.target.value)}>
                 <option value="">— Round-robin (auto-assign) —</option>
                 {senders.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} &lt;{s.email}&gt;</option>
+                  <option key={s.id} value={s.id}>{(s.display_name || s.name || s.email)} &lt;{s.email}&gt;</option>
                 ))}
               </select>
               <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.4rem' }}>Leave blank to auto-rotate across all active mailboxes.</p>
@@ -1037,13 +1159,24 @@ export const CampaignDetailPage = () => {
                  `Sending to ${broadcastSelectedIds.size} selected contacts`}
               </p>
             </div>
-            <button 
-              className="btn btn--primary" 
-              onClick={handleLaunchBroadcast}
-              disabled={isSending || !selectedTemplate || (broadcastMode === 'select' && broadcastSelectedIds.size === 0)}
-            >
-              <FiSend style={{ marginRight: '0.5rem' }} /> {isSending ? 'Launching...' : 'Launch Broadcast'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button 
+                type="button"
+                className="btn btn--secondary" 
+                onClick={openTestSendForBroadcast}
+                disabled={!selectedTemplate}
+                title="Send a single test email to your inbox before launching the broadcast"
+              >
+                <FiSend style={{ marginRight: '0.5rem' }} /> Send Test Email
+              </button>
+              <button 
+                className="btn btn--primary" 
+                onClick={handleLaunchBroadcast}
+                disabled={isSending || !selectedTemplate || (broadcastMode === 'select' && broadcastSelectedIds.size === 0)}
+              >
+                <FiPlay style={{ marginRight: '0.5rem' }} /> {isSending ? 'Launching...' : 'Launch Broadcast'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1286,8 +1419,8 @@ export const CampaignDetailPage = () => {
                 )}
 
                 <div style={{ background: 'hsl(var(--secondary))', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
-                  <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>📅 30-Day Cadence & Round-Robin Rotation</p>
-                  <p className="text-muted">Day 0 → 3 → 7 → 12 → 18 → 24 → 30 (weekdays only). Leads are distributed round-robin across Shantanu, Ranjit, and Prashant.</p>
+                  <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>📅 30-Day Cadence & City Mailbox Routing</p>
+                  <p className="text-muted">Day 0 → 3 → 7 → 12 → 18 → 24 → 30 (7 days a week, calendar days). Charlotte leads are sent by Shantanu, Cedar Rapids leads by Ranjit.</p>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'hsl(var(--c3) / 0.1)', borderRadius: 8, marginBottom: '1.25rem' }}>
@@ -1314,6 +1447,104 @@ export const CampaignDetailPage = () => {
                   </button>
                 </div>
               </>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Test Send Modal */}
+      {testSendModalOpen && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120 }}>
+          <div className="page-card" style={{ width: 540, maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', background: 'hsl(var(--background))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiSend /> Send Test Email
+              </h2>
+              <button type="button" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setTestSendModalOpen(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+
+            {testSuccessMessage ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                <FiCheckCircle size={44} style={{ color: 'hsl(var(--c2))', marginBottom: '1rem' }} />
+                <h3 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Test Email Sent!</h3>
+                <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1.5rem' }}>{testSuccessMessage}</p>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                  <button type="button" className="btn btn--secondary" onClick={() => setTestSuccessMessage(null)}>Send Another Test</button>
+                  <button type="button" className="btn btn--primary" onClick={() => setTestSendModalOpen(false)}>Done</button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleExecuteTestSend}>
+                <div style={{ padding: '0.75rem', background: 'hsl(var(--secondary) / 0.6)', borderRadius: 8, marginBottom: '1.25rem', fontSize: '0.85rem' }}>
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    {testTargetStep ? `Sequence Step ${testTargetStep.step_number}` : 'Broadcast Email'}
+                  </p>
+                  <p className="text-muted" style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem' }}>
+                    Subject: <strong>{testTargetStep?.subject || templates.find(t => t.id === selectedTemplate)?.subject || '(from template)'}</strong>
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label className="form-label">Send From Mailbox *</label>
+                  <select
+                    className="form-input"
+                    value={testSenderId}
+                    onChange={e => setTestSenderId(e.target.value)}
+                  >
+                    <option value="">— Auto-select founder mailbox —</option>
+                    {senders.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {(s.display_name || s.name || s.email)} &lt;{s.email}&gt;
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                    Select which founder mailbox will send this test email.
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label className="form-label">Test Recipient Email *</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    required
+                    placeholder="e.g. your-email@promptline.app"
+                    value={testRecipientEmail}
+                    onChange={e => setTestRecipientEmail(e.target.value)}
+                  />
+                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                    The email address where this test will be delivered.
+                  </p>
+                </div>
+
+                <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '0.85rem', marginBottom: '1.5rem', fontSize: '0.78rem' }}>
+                  <p style={{ fontWeight: 600, marginBottom: '0.3rem' }}>Merge Variables Preview</p>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'hsl(var(--muted-foreground))' }}>
+                    <li><code>&#123;&#123;first_name&#125;&#125;</code> &rarr; Mike</li>
+                    <li><code>&#123;&#123;company&#125;&#125;</code> &rarr; Ridgeline Heating &amp; Air</li>
+                    <li><code>&#123;&#123;sender_first_name&#125;&#125;</code> &rarr; sender&apos;s first name (e.g. Shantanu / Ranjit)</li>
+                    <li><code>&#123;&#123;booking_link&#125;&#125;</code> &rarr; round-robin booking link</li>
+                    <li><code>&#123;&#123;physical_address&#125;&#125;</code> &rarr; PromptLine postal address in footer</li>
+                  </ul>
+                  <p style={{ marginTop: '0.5rem', marginBottom: 0, color: 'hsl(var(--muted-foreground))' }}>
+                    The subject will be prefixed with <code>[TEST]</code>. No campaign or lead records will be updated.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn--secondary" onClick={() => setTestSendModalOpen(false)}>Cancel</button>
+                  <button
+                    type="submit"
+                    className="btn btn--primary"
+                    disabled={testSending || !testRecipientEmail}
+                  >
+                    <FiSend style={{ marginRight: '0.4rem' }} />
+                    {testSending ? 'Sending Test…' : 'Send Test Now'}
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>

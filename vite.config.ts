@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    root: path.resolve(__dirname),
     plugins: [react(), devApi()],
     resolve: {
       alias: {
