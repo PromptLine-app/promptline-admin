@@ -69,6 +69,23 @@ export const ContactsPage = () => {
   const [selectedSequenceId, setSelectedSequenceId] = useState('');
   const [enrolling, setEnrolling] = useState(false);
 
+  // Single Contact Edit Modal
+  const [editingContact, setEditingContact] = useState<EmailContact | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editCompany, setEditCompany] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
+
+  // Batch Tag Modal
+  const [showBatchTagModal, setShowBatchTagModal] = useState(false);
+  const [batchTagInput, setBatchTagInput] = useState('');
+  const [batchTagAction, setBatchTagAction] = useState<'add' | 'remove'>('add');
+  const [savingBatchTags, setSavingBatchTags] = useState(false);
+
   const loadContacts = useCallback(async () => {
     setLoading(true);
     try {
@@ -438,6 +455,94 @@ export const ContactsPage = () => {
     }
   };
 
+  const openEditContactModal = (c: EmailContact) => {
+    setEditingContact(c);
+    setEditFirstName(c.first_name || '');
+    setEditLastName(c.last_name || '');
+    setEditEmail(c.email || '');
+    setEditCompany(c.company || '');
+    setEditPhone(c.phone || '');
+    setEditTags(Array.isArray(c.tags) ? [...c.tags] : []);
+    setNewTagInput('');
+  };
+
+  const handleSaveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingContact) return;
+    if (!editEmail.trim()) { toast('Email cannot be empty', 'error'); return; }
+
+    setSavingContact(true);
+    try {
+      const fullName = [editFirstName.trim(), editLastName.trim()].filter(Boolean).join(' ') || editingContact.full_name;
+      const { error } = await supabase
+        .from('email_contacts')
+        .update({
+          first_name: editFirstName.trim() || null,
+          last_name: editLastName.trim() || null,
+          full_name: fullName,
+          email: editEmail.trim(),
+          company: editCompany.trim() || null,
+          phone: editPhone.trim() || null,
+          tags: editTags,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingContact.id);
+
+      if (error) throw error;
+
+      toast('Contact updated successfully!', 'success');
+      setContacts(prev => prev.map(c => c.id === editingContact.id ? {
+        ...c,
+        first_name: editFirstName.trim() || null,
+        last_name: editLastName.trim() || null,
+        full_name: fullName,
+        email: editEmail.trim(),
+        company: editCompany.trim() || null,
+        phone: editPhone.trim() || null,
+        tags: editTags,
+      } : c));
+      setEditingContact(null);
+    } catch (err: any) {
+      reportError(err, { where: 'ContactsPage.handleSaveContact' });
+      toast(err.message || 'Failed to update contact', 'error');
+    } finally {
+      setSavingContact(false);
+    }
+  };
+
+  const handleApplyBatchTags = async () => {
+    const tag = batchTagInput.trim().toLowerCase();
+    if (!tag || selectedContactIds.size === 0) return;
+
+    setSavingBatchTags(true);
+    try {
+      const selectedContacts = contacts.filter(c => selectedContactIds.has(c.id));
+      for (const contact of selectedContacts) {
+        let currentTags = Array.isArray(contact.tags) ? [...contact.tags] : [];
+        if (batchTagAction === 'add') {
+          if (!currentTags.includes(tag)) currentTags.push(tag);
+        } else {
+          currentTags = currentTags.filter(t => t !== tag);
+        }
+
+        await supabase
+          .from('email_contacts')
+          .update({ tags: currentTags, updated_at: new Date().toISOString() })
+          .eq('id', contact.id);
+      }
+
+      toast(`Successfully ${batchTagAction === 'add' ? 'added tag to' : 'removed tag from'} ${selectedContactIds.size} contacts!`, 'success');
+      await loadContacts();
+      setShowBatchTagModal(false);
+      setBatchTagInput('');
+    } catch (err: any) {
+      reportError(err, { where: 'ContactsPage.handleApplyBatchTags' });
+      toast(err.message || 'Failed to update tags', 'error');
+    } finally {
+      setSavingBatchTags(false);
+    }
+  };
+
   const columns: ColumnDef<EmailContact>[] = [
     {
       id: 'select',
@@ -523,7 +628,11 @@ export const ContactsPage = () => {
     {
       header: 'Tags', id: 'tags',
       cell: (row) => (
-        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', maxWidth: 220 }}>
+        <div
+          style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', maxWidth: 220, cursor: 'pointer' }}
+          onClick={() => openEditContactModal(row)}
+          title="Click to edit tags"
+        >
           {(row.tags && row.tags.length > 0) ? (
             row.tags.map(t => (
               <span
@@ -535,9 +644,11 @@ export const ContactsPage = () => {
                   fontWeight: 600,
                   background: t.includes('lawn') ? 'hsl(142 71% 45% / 0.15)' :
                               t.includes('hvac') || t.includes('plumb') ? 'hsl(217 91% 60% / 0.15)' :
+                              t.includes('held-back') ? 'hsl(0 84% 60% / 0.15)' :
                               'hsl(var(--secondary))',
                   color: t.includes('lawn') ? 'hsl(142 71% 45%)' :
                          t.includes('hvac') || t.includes('plumb') ? 'hsl(217 91% 60%)' :
+                         t.includes('held-back') ? 'hsl(0 84% 60%)' :
                          'inherit',
                 }}
               >
@@ -545,7 +656,7 @@ export const ContactsPage = () => {
               </span>
             ))
           ) : (
-            <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>
+            <span className="text-muted" style={{ fontSize: '0.75rem', fontStyle: 'italic' }}>+ Add tag</span>
           )}
         </div>
       )
@@ -571,6 +682,20 @@ export const ContactsPage = () => {
         }}>
           {row.status}
         </span>
+      ),
+    },
+    {
+      header: 'Actions', id: 'actions', sortable: false,
+      cell: (row) => (
+        <button
+          type="button"
+          className="btn btn--secondary"
+          style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+          onClick={(e) => { e.stopPropagation(); openEditContactModal(row); }}
+          title="Edit contact details and tags"
+        >
+          <FiTag size={11} /> Edit
+        </button>
       ),
     },
   ];
@@ -743,14 +868,24 @@ export const ContactsPage = () => {
           >
             Clear
           </button>
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
-            onClick={() => setShowSequenceModal(true)}
-            style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '999px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <FiPlay size={13} /> Add to Sequence
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => setShowBatchTagModal(true)}
+              style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '999px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <FiTag size={13} /> Manage Tags ({selectedContactIds.size})
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => setShowSequenceModal(true)}
+              style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '999px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <FiPlay size={13} /> Add to Sequence
+            </button>
+          </div>
         </div>
       )}
 
@@ -789,9 +924,9 @@ export const ContactsPage = () => {
             </div>
 
             <div style={{ background: 'hsl(var(--secondary) / 0.5)', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
-              <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>👥 Founder Round-Robin Assignment</p>
+              <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>👥 City-Locked Founder Routing</p>
               <p className="text-muted" style={{ margin: 0 }}>
-                Contacts will be distributed evenly across Shantanu, Ranjit, and Prashant. Day 0 will be scheduled on the next weekday.
+                Contacts tagged <code>charlotte-nc</code> are sent by Shantanu. Contacts tagged <code>cedar-rapids-ia</code> are sent by Ranjit. Day 0 fires immediately, follow-ups scheduled 7 days a week.
               </p>
             </div>
 
@@ -811,6 +946,234 @@ export const ContactsPage = () => {
                 onClick={handleEnrollSelectedInSequence}
               >
                 {enrolling ? 'Enrolling…' : `Confirm & Enroll ${selectedContactIds.size} Leads`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Single Contact Modal */}
+      {editingContact && (
+        <div className="modal-backdrop" onClick={() => setEditingContact(null)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiTag /> Edit Contact & Tags
+              </h3>
+              <button className="icon-button" onClick={() => setEditingContact(null)}><FiX /></button>
+            </div>
+
+            <form onSubmit={handleSaveContact}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <div>
+                  <label className="form-label">First Name</label>
+                  <input
+                    className="form-input"
+                    value={editFirstName}
+                    onChange={e => setEditFirstName(e.target.value)}
+                    placeholder="First Name"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Last Name</label>
+                  <input
+                    className="form-input"
+                    value={editLastName}
+                    onChange={e => setEditLastName(e.target.value)}
+                    placeholder="Last Name"
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label className="form-label">Email *</label>
+                <input
+                  type="email"
+                  required
+                  className="form-input"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <label className="form-label">Company</label>
+                  <input
+                    className="form-input"
+                    value={editCompany}
+                    onChange={e => setEditCompany(e.target.value)}
+                    placeholder="Company name"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Phone</label>
+                  <input
+                    className="form-input"
+                    value={editPhone}
+                    onChange={e => setEditPhone(e.target.value)}
+                    placeholder="Phone"
+                  />
+                </div>
+              </div>
+
+              {/* Tags Section */}
+              <div style={{ marginBottom: '1.25rem', padding: '0.75rem', background: 'hsl(var(--secondary) / 0.5)', borderRadius: 8 }}>
+                <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Tags</label>
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                  {editTags.map(t => (
+                    <span
+                      key={t}
+                      style={{
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: 6,
+                        fontSize: '0.75rem',
+                        background: 'hsl(var(--secondary))',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                      }}
+                    >
+                      {t}
+                      <button
+                        type="button"
+                        onClick={() => setEditTags(editTags.filter(item => item !== t))}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: 'hsl(var(--muted-foreground))' }}
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                  {editTags.length === 0 && <span className="text-muted" style={{ fontSize: '0.75rem' }}>No tags assigned</span>}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <input
+                    className="form-input"
+                    style={{ fontSize: '0.8rem' }}
+                    placeholder="Add a new tag (e.g. held-back, charlotte-nc)..."
+                    value={newTagInput}
+                    onChange={e => setNewTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const tag = newTagInput.trim().toLowerCase();
+                        if (tag && !editTags.includes(tag)) {
+                          setEditTags([...editTags, tag]);
+                          setNewTagInput('');
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      const tag = newTagInput.trim().toLowerCase();
+                      if (tag && !editTags.includes(tag)) {
+                        setEditTags([...editTags, tag]);
+                        setNewTagInput('');
+                      }
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  onClick={() => setEditingContact(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={savingContact || !editEmail}
+                >
+                  {savingContact ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Tag Management Modal */}
+      {showBatchTagModal && (
+        <div className="modal-backdrop" onClick={() => setShowBatchTagModal(false)}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiTag /> Manage Tags on {selectedContactIds.size} Contact(s)
+              </h3>
+              <button className="icon-button" onClick={() => setShowBatchTagModal(false)}><FiX /></button>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="form-label">Action</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className={`btn ${batchTagAction === 'add' ? 'btn--primary' : 'btn--secondary'}`}
+                  style={{ fontSize: '0.8rem', padding: '0.4rem' }}
+                  onClick={() => setBatchTagAction('add')}
+                >
+                  + Add Tag
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${batchTagAction === 'remove' ? 'btn--primary' : 'btn--secondary'}`}
+                  style={{ fontSize: '0.8rem', padding: '0.4rem' }}
+                  onClick={() => setBatchTagAction('remove')}
+                >
+                  &minus; Remove Tag
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="form-label">Tag Name</label>
+              <input
+                className="form-input"
+                placeholder="e.g. held-back, enrolled-sequence-a, charlotte-nc"
+                value={batchTagInput}
+                onChange={e => setBatchTagInput(e.target.value)}
+              />
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                {['held-back', 'charlotte-nc', 'cedar-rapids-ia', 'lawn-care', 'hvac-plumbing'].map(quickTag => (
+                  <button
+                    key={quickTag}
+                    type="button"
+                    className="btn btn--secondary"
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
+                    onClick={() => setBatchTagInput(quickTag)}
+                  >
+                    {quickTag}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => setShowBatchTagModal(false)}
+                disabled={savingBatchTags}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={savingBatchTags || !batchTagInput.trim()}
+                onClick={handleApplyBatchTags}
+              >
+                {savingBatchTags ? 'Applying…' : `${batchTagAction === 'add' ? 'Add' : 'Remove'} Tag`}
               </button>
             </div>
           </div>
