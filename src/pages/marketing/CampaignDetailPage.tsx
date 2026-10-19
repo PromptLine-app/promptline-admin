@@ -64,6 +64,8 @@ export const CampaignDetailPage = () => {
   const [testSendModalOpen, setTestSendModalOpen] = useState(false);
   const [testTargetStep, setTestTargetStep] = useState<any | null>(null);
   const [testRecipientEmail, setTestRecipientEmail] = useState('');
+  const [testRecipientName, setTestRecipientName] = useState('Mayur');
+  const [testCompanyName, setTestCompanyName] = useState('PromptLine');
   const [testSenderId, setTestSenderId] = useState('');
   const [testSending, setTestSending] = useState(false);
   const [testSuccessMessage, setTestSuccessMessage] = useState<string | null>(null);
@@ -72,6 +74,11 @@ export const CampaignDetailPage = () => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user?.email) {
         setTestRecipientEmail(data.user.email);
+        const namePart = (data.user.user_metadata?.first_name || data.user.user_metadata?.name || data.user.email.split('@')[0].split('.')[0] || '').trim();
+        if (namePart) {
+          const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+          setTestRecipientName(capitalized);
+        }
       }
     });
   }, []);
@@ -111,14 +118,17 @@ export const CampaignDetailPage = () => {
     setTestSuccessMessage(null);
     try {
       const isSequence = campaign?.type === 'sequence';
+      const effectiveName = testRecipientName.trim() || 'Mike';
+      const effectiveCompany = testCompanyName.trim() || 'Ridgeline Heating & Air';
+
       const body: Record<string, unknown> = {
         recipient_email: testRecipientEmail.trim(),
-        recipient_name: 'Mike',
+        recipient_name: effectiveName,
         is_test: true,
         variables: {
-          '{{first_name}}': 'Mike',
-          '{{name}}': 'Mike',
-          '{{company}}': 'Ridgeline Heating & Air',
+          '{{first_name}}': effectiveName,
+          '{{name}}': effectiveName,
+          '{{company}}': effectiveCompany,
         },
       };
 
@@ -1519,11 +1529,40 @@ export const CampaignDetailPage = () => {
                   </p>
                 </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <div>
+                    <label className="form-label">Recipient First Name</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Mayur"
+                      value={testRecipientName}
+                      onChange={e => setTestRecipientName(e.target.value)}
+                    />
+                    <p className="text-muted" style={{ fontSize: '0.72rem', marginTop: '0.25rem' }}>
+                      Replaces <code>&#123;&#123;first_name&#125;&#125;</code>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="form-label">Recipient Company</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. PromptLine"
+                      value={testCompanyName}
+                      onChange={e => setTestCompanyName(e.target.value)}
+                    />
+                    <p className="text-muted" style={{ fontSize: '0.72rem', marginTop: '0.25rem' }}>
+                      Replaces <code>&#123;&#123;company&#125;&#125;</code>
+                    </p>
+                  </div>
+                </div>
+
                 <div style={{ background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, padding: '0.85rem', marginBottom: '1.5rem', fontSize: '0.78rem' }}>
                   <p style={{ fontWeight: 600, marginBottom: '0.3rem' }}>Merge Variables Preview</p>
                   <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'hsl(var(--muted-foreground))' }}>
-                    <li><code>&#123;&#123;first_name&#125;&#125;</code> &rarr; Mike</li>
-                    <li><code>&#123;&#123;company&#125;&#125;</code> &rarr; Ridgeline Heating &amp; Air</li>
+                    <li><code>&#123;&#123;first_name&#125;&#125;</code> &rarr; <strong>{testRecipientName.trim() || 'Mike'}</strong></li>
+                    <li><code>&#123;&#123;company&#125;&#125;</code> &rarr; <strong>{testCompanyName.trim() || 'Ridgeline Heating & Air'}</strong></li>
                     <li><code>&#123;&#123;sender_first_name&#125;&#125;</code> &rarr; sender&apos;s first name (e.g. Shantanu / Ranjit)</li>
                     <li><code>&#123;&#123;booking_link&#125;&#125;</code> &rarr; round-robin booking link</li>
                     <li><code>&#123;&#123;physical_address&#125;&#125;</code> &rarr; PromptLine postal address in footer</li>

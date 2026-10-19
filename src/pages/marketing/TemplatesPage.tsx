@@ -7,11 +7,11 @@ import { reportError } from '@/lib/sentry';
 import type { EmailTemplate } from '@/types/domain';
 import {
   FiPlus, FiEdit2, FiTrash2, FiX, FiEye, FiSave,
-  FiMonitor, FiSmartphone, FiTag, FiFileText,
+  FiMonitor, FiSmartphone, FiTag, FiFileText, FiSearch,
 } from 'react-icons/fi';
 
 const CATEGORIES = ['general', 'follow_up', 'demo', 'announcement'] as const;
-const COMMON_VARS = ['{{name}}', '{{company}}', '{{sender_name}}', '{{monthly_loss}}', '{{phone}}', '{{industry}}'];
+const COMMON_VARS = ['{{first_name}}', '{{company}}', '{{sender_first_name}}', '{{booking_link}}', '{{name}}', '{{phone}}', '{{industry}}'];
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -50,6 +50,8 @@ export const TemplatesPage = () => {
   const [saving, setSaving] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [filterTab, setFilterTab] = useState<'active' | 'archived' | 'all'>('active');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -144,13 +146,33 @@ export const TemplatesPage = () => {
   };
 
   /* ---- PREVIEW ---- */
-  const previewHtml = (selected.body_html ?? '')
-    .replace(/\{\{name\}\}/g, 'John Smith')
-    .replace(/\{\{company\}\}/g, 'ABC Plumbing')
-    .replace(/\{\{sender_name\}\}/g, 'Ranjit')
+  const previewHtml = (selected.body_html || (selected.body_text ? `<div style="white-space:pre-wrap;font-family:sans-serif;padding:16px;">${selected.body_text}</div>` : ''))
+    .replace(/\{\{first_name\}\}/g, 'Mike')
+    .replace(/\{\{name\}\}/g, 'Mike')
+    .replace(/\{\{company\}\}/g, 'Ridgeline Heating & Air')
+    .replace(/\{\{sender_first_name\}\}/g, 'Shantanu')
+    .replace(/\{\{sender_name\}\}/g, 'Shantanu')
+    .replace(/\{\{booking_link\}\}/g, 'https://www.promptline.app/')
+    .replace(/\{\{physical_address\}\}/g, 'PromptLine · Charlotte, NC')
     .replace(/\{\{monthly_loss\}\}/g, '$4,200')
     .replace(/\{\{phone\}\}/g, '+1 (555) 000-0000')
     .replace(/\{\{industry\}\}/g, 'Plumbing');
+
+  const activeCount = templates.filter(t => t.is_active !== false && !t.name.startsWith('NOT IN USE')).length;
+  const archivedCount = templates.filter(t => t.is_active === false || t.name.startsWith('NOT IN USE')).length;
+
+  const filteredTemplates = templates.filter(tmpl => {
+    const isNotInUse = tmpl.is_active === false || tmpl.name.startsWith('NOT IN USE');
+    if (filterTab === 'active' && isNotInUse) return false;
+    if (filterTab === 'archived' && !isNotInUse) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = tmpl.name.toLowerCase().includes(q);
+      const matchSubject = (tmpl.subject || '').toLowerCase().includes(q);
+      if (!matchName && !matchSubject) return false;
+    }
+    return true;
+  });
 
   /* ---- LIST VIEW ---- */
   if (mode === 'list') {
@@ -166,22 +188,65 @@ export const TemplatesPage = () => {
           }
         />
 
+        {/* Filter Tabs & Search Bar */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', gap: '0.35rem', background: 'hsl(var(--secondary) / 0.5)', padding: '0.25rem', borderRadius: 8 }}>
+            <button
+              className={`btn btn--sm ${filterTab === 'active' ? 'btn--primary' : 'btn--secondary'}`}
+              style={{ border: 'none' }}
+              onClick={() => setFilterTab('active')}
+            >
+              Active ({activeCount})
+            </button>
+            <button
+              className={`btn btn--sm ${filterTab === 'archived' ? 'btn--primary' : 'btn--secondary'}`}
+              style={{ border: 'none' }}
+              onClick={() => setFilterTab('archived')}
+            >
+              Not In Use / Archived ({archivedCount})
+            </button>
+            <button
+              className={`btn btn--sm ${filterTab === 'all' ? 'btn--primary' : 'btn--secondary'}`}
+              style={{ border: 'none' }}
+              onClick={() => setFilterTab('all')}
+            >
+              All ({templates.length})
+            </button>
+          </div>
+
+          <div style={{ position: 'relative', width: 260 }}>
+            <FiSearch style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted-foreground))' }} />
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search templates…"
+              style={{ paddingLeft: '2rem', height: 34, fontSize: '0.82rem' }}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
         {loading ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
             {[1, 2, 3].map(i => <div key={i} className="page-card skeleton" style={{ height: 160 }} />)}
           </div>
-        ) : templates.length === 0 ? (
+        ) : filteredTemplates.length === 0 ? (
           <div className="page-card" style={{ padding: '3rem', textAlign: 'center' }}>
             <FiFileText size={48} style={{ color: 'hsl(var(--muted-foreground))', marginBottom: '1rem' }} />
-            <h3>No templates yet</h3>
-            <p className="text-muted">Create your first email template to get started.</p>
-            <button className="btn btn--primary" style={{ marginTop: '1rem' }} onClick={handleNew}>
-              <FiPlus style={{ marginRight: '0.4rem' }} /> Create Template
-            </button>
+            <h3>No templates found</h3>
+            <p className="text-muted">
+              {searchQuery ? 'No templates match your search query.' : 'No templates in this view.'}
+            </p>
+            {searchQuery && (
+              <button className="btn btn--secondary btn--sm" style={{ marginTop: '0.75rem' }} onClick={() => setSearchQuery('')}>
+                Clear Search
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-            {templates.map(tmpl => (
+            {filteredTemplates.map(tmpl => (
               <div key={tmpl.id} className="page-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1 }}>
