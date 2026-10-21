@@ -41,6 +41,23 @@ const defaultTemplate: Partial<EmailTemplate> = {
   is_active: true,
 };
 
+function htmlToPlainText(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&ldquo;|&rdquo;/g, '"')
+    .replace(/&lsquo;|&rsquo;/g, "'")
+    .replace(/&middot;/g, '·')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export const TemplatesPage = () => {
   const { toast } = useToast();
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -94,7 +111,7 @@ export const TemplatesPage = () => {
         category: selected.category ?? 'general',
         subject: selected.subject.trim(),
         body_html: selected.body_html,
-        body_text: selected.body_text ?? null,
+        body_text: htmlToPlainText(selected.body_html),
         variables: selected.variables ?? [],
         is_active: selected.is_active ?? true,
         updated_at: new Date().toISOString(),

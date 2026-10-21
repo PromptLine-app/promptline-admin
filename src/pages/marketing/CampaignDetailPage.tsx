@@ -1564,8 +1564,6 @@ export const CampaignDetailPage = () => {
                     <li><code>&#123;&#123;first_name&#125;&#125;</code> &rarr; <strong>{testRecipientName.trim() || 'Mike'}</strong></li>
                     <li><code>&#123;&#123;company&#125;&#125;</code> &rarr; <strong>{testCompanyName.trim() || 'Ridgeline Heating & Air'}</strong></li>
                     <li><code>&#123;&#123;sender_first_name&#125;&#125;</code> &rarr; sender&apos;s first name (e.g. Shantanu / Ranjit)</li>
-                    <li><code>&#123;&#123;booking_link&#125;&#125;</code> &rarr; round-robin booking link</li>
-                    <li><code>&#123;&#123;physical_address&#125;&#125;</code> &rarr; PromptLine postal address in footer</li>
                   </ul>
                   <p style={{ marginTop: '0.5rem', marginBottom: 0, color: 'hsl(var(--muted-foreground))' }}>
                     The subject will be prefixed with <code>[TEST]</code>. No campaign or lead records will be updated.

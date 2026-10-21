@@ -81,6 +81,8 @@ export const ContactsPage = () => {
   const [editWebsite, setEditWebsite] = useState('');
   const [editCity, setEditCity] = useState('');
   const [editState, setEditState] = useState('');
+  const [editStatus, setEditStatus] = useState('active');
+  const [editEngagementState, setEditEngagementState] = useState('warm');
   const [editTags, setEditTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [savingContact, setSavingContact] = useState(false);
@@ -115,13 +117,21 @@ export const ContactsPage = () => {
       try {
         const { data } = await supabase
           .from('marketing_campaigns')
-          .select('id, name, status, type')
+          .select('id, name, status, type, campaign_steps(count)')
           .eq('type', 'sequence')
-          .in('status', ['draft', 'live'])
-          .order('name');
-        setSequences(data || []);
-        if (data && data.length > 0 && !selectedSequenceId) {
-          setSelectedSequenceId(data[0].id);
+          .in('status', ['draft', 'live', 'paused'])
+          .order('created_at', { ascending: false });
+
+        const list = (data || []).map((s: any) => ({
+          ...s,
+          step_count: s.campaign_steps?.[0]?.count ?? 0,
+        }));
+        setSequences(list);
+        const firstReady = list.find((s: any) => s.step_count > 0);
+        if (firstReady) {
+          setSelectedSequenceId(firstReady.id);
+        } else if (list.length > 0) {
+          setSelectedSequenceId(list[0].id);
         }
       } catch (err) {
         reportError(err, { where: 'ContactsPage.fetchSequences' });
@@ -487,6 +497,8 @@ export const ContactsPage = () => {
     setEditWebsite(c.website || '');
     setEditCity(c.city || '');
     setEditState(c.state || '');
+    setEditStatus(c.status || 'active');
+    setEditEngagementState(c.engagement_state || 'warm');
     setEditTags(Array.isArray(c.tags) ? [...c.tags] : []);
     setNewTagInput('');
     setShowContactModal(true);
@@ -545,7 +557,7 @@ export const ContactsPage = () => {
       } else {
         if (!editingContactId) return;
 
-        const updatePayload = {
+        const updatePayload: Record<string, unknown> = {
           first_name: editFirstName.trim() || null,
           last_name: editLastName.trim() || null,
           full_name: fullName,
@@ -555,9 +567,15 @@ export const ContactsPage = () => {
           website: editWebsite.trim() || null,
           city: editCity.trim() || null,
           state: editState.trim() || null,
+          status: editStatus,
+          engagement_state: editEngagementState,
           tags: editTags,
           updated_at: new Date().toISOString(),
         };
+
+        if (editStatus === 'active') {
+          updatePayload.unsubscribed_at = null;
+        }
 
         const { error } = await supabase
           .from('email_contacts')
@@ -644,16 +662,36 @@ export const ContactsPage = () => {
     },
     {
       header: 'Name', id: 'full_name',
-      cell: (row) => (
-        <div>
-          <p style={{ fontWeight: 600, margin: 0 }}>
-            {row.first_name && row.last_name
-              ? `${row.first_name} ${row.last_name}`
-              : row.full_name || 'Unknown'}
-          </p>
-          <p className="text-muted" style={{ fontSize: '0.75rem', margin: '2px 0 0' }}>{row.email}</p>
-        </div>
-      ),
+      cell: (row) => {
+        const isSuppressed = (row.status as string) === 'suppressed' || row.engagement_state === 'suppressed' || row.status === 'unsubscribed';
+        return (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <p style={{ fontWeight: 600, margin: 0 }}>
+                {row.first_name && row.last_name
+                  ? `${row.first_name} ${row.last_name}`
+                  : row.full_name || 'Unknown'}
+              </p>
+              {isSuppressed && (
+                <span
+                  style={{
+                    fontSize: '0.65rem',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: 4,
+                    background: 'hsl(var(--destructive) / 0.15)',
+                    color: 'hsl(var(--destructive))',
+                    fontWeight: 600,
+                  }}
+                  title="Contact has unsubscribed or is suppressed from outreach"
+                >
+                  Suppressed
+                </span>
+              )}
+            </div>
+            <p className="text-muted" style={{ fontSize: '0.75rem', margin: '2px 0 0' }}>{row.email}</p>
+          </div>
+        );
+      },
     },
     {
       header: 'Company', accessorKey: 'company',
@@ -987,8 +1025,8 @@ export const ContactsPage = () => {
                   <option value="">No active sequence campaigns found</option>
                 ) : (
                   sequences.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.status.toUpperCase()})
+                    <option key={s.id} value={s.id} disabled={s.step_count === 0}>
+                      {s.name} ({s.status.toUpperCase()}){s.step_count === 0 ? ' — (No steps configured)' : ` — ${s.step_count} steps`}
                     </option>
                   ))
                 )}
@@ -1037,6 +1075,27 @@ export const ContactsPage = () => {
             </div>
 
             <form onSubmit={handleSaveContact}>
+              {!isNewContact && (editStatus === 'suppressed' || editEngagementState === 'suppressed') && (
+                <div style={{ padding: '0.65rem 0.85rem', background: 'hsl(var(--destructive) / 0.1)', border: '1px solid hsl(var(--destructive) / 0.25)', borderRadius: 8, marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <div>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.8rem', color: 'hsl(var(--destructive))' }}>Contact is Suppressed / Unsubscribed</p>
+                    <p className="text-muted" style={{ margin: '0.2rem 0 0 0', fontSize: '0.72rem' }}>Outreach emails are blocked for this contact. Reactivate to allow sequence enrollment.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    style={{ flexShrink: 0 }}
+                    onClick={() => {
+                      setEditStatus('active');
+                      setEditEngagementState('warm');
+                      toast('Status set to Active. Click Save Changes to apply.', 'success');
+                    }}
+                  >
+                    Reactivate
+                  </button>
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                 <div>
                   <label className="form-label">First Name</label>
