@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiMail, FiUsers, FiFileText, FiSend, FiTrendingUp, FiAlertCircle } from 'react-icons/fi';
+import { FiMail, FiUsers, FiFileText, FiSend, FiTrendingUp, FiAlertCircle, FiSearch, FiCheckCircle, FiXCircle, FiClock } from 'react-icons/fi';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Legend, AreaChart, Area
@@ -29,6 +29,11 @@ export const MarketingDashboardPage = () => {
   const [recentSends, setRecentSends] = useState<any[]>([]);
   const [senders, setSenders] = useState<MarketingSender[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalSendCount, setTotalSendCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [sendSearch, setSendSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'failed' | 'sending'>('all');
+  const SENDS_PER_PAGE = 25;
 
   useEffect(() => {
     const load = async () => {
@@ -37,18 +42,19 @@ export const MarketingDashboardPage = () => {
           { count: contacts },
           { count: templates },
           { count: totalSends },
+          { count: allSendsCount },
           { data: senderData },
           { data: recent },
         ] = await Promise.all([
           supabase.from('email_contacts').select('*', { count: 'exact', head: true }).eq('status', 'active'),
           supabase.from('email_templates').select('*', { count: 'exact', head: true }).eq('is_active', true),
           supabase.from('email_sends').select('*', { count: 'exact', head: true }).eq('status', 'sent'),
+          supabase.from('email_sends').select('*', { count: 'exact', head: true }),
           supabase.from('marketing_senders').select('*').eq('is_active', true),
           supabase.from('email_sends')
-            .select('id, recipient_email, subject, status, sent_at, opened_at, clicked_at, sender_id, marketing_senders(display_name, email)')
-            .eq('status', 'sent')
+            .select('id, recipient_email, subject, status, sent_at, opened_at, clicked_at, sender_id, error_message, marketing_senders(display_name, email)')
             .order('sent_at', { ascending: false })
-            .limit(8),
+            .limit(SENDS_PER_PAGE),
         ]);
 
         // Emails this month
@@ -135,6 +141,7 @@ export const MarketingDashboardPage = () => {
 
         setSenders((senderData ?? []) as MarketingSender[]);
         setRecentSends(recent ?? []);
+        setTotalSendCount(allSendsCount ?? totalSends ?? 0);
         setStats({
           totalContacts: contacts ?? 0,
           totalTemplates: templates ?? 0,
@@ -159,6 +166,17 @@ export const MarketingDashboardPage = () => {
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const filteredSends = recentSends.filter((send) => {
+    if (statusFilter !== 'all' && (send.status || 'sent') !== statusFilter) return false;
+    if (sendSearch.trim()) {
+      const q = sendSearch.toLowerCase();
+      const email = (send.recipient_email || '').toLowerCase();
+      const subject = (send.subject || '').toLowerCase();
+      return email.includes(q) || subject.includes(q);
+    }
+    return true;
+  });
 
   const kpis = stats
     ? [
@@ -397,60 +415,224 @@ export const MarketingDashboardPage = () => {
         </div>
       )}
 
-      {/* Recent Sends */}
+      {/* Sends & Tracking History */}
       {recentSends.length > 0 && (
         <div className="page-card" style={{ padding: '1.5rem', marginTop: '1.5rem' }}>
-          <h3 style={{ marginBottom: '1rem', fontWeight: 600 }}>Recent Sends & Tracking History</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h3 style={{ fontWeight: 600, margin: 0 }}>Sends & Tracking History</h3>
+              <p className="text-muted" style={{ fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
+                Showing {filteredSends.length} {filteredSends.length !== recentSends.length ? `(filtered from ${recentSends.length})` : ''} of {totalSendCount} total emails
+              </p>
+            </div>
+
+            {/* Search & Status Filter Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', minWidth: 240 }}>
+                <FiSearch style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted-foreground))' }} />
+                <input
+                  type="text"
+                  placeholder="Search recipient or subject..."
+                  value={sendSearch}
+                  onChange={(e) => setSendSearch(e.target.value)}
+                  style={{
+                    padding: '0.45rem 0.75rem 0.45rem 2rem',
+                    fontSize: '0.85rem',
+                    borderRadius: 6,
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(var(--background))',
+                    color: 'hsl(var(--foreground))',
+                    width: '100%',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.25rem', background: 'hsl(var(--background))', padding: '0.2rem', borderRadius: 6, border: '1px solid hsl(var(--border))' }}>
+                {(['all', 'sent', 'failed'] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    style={{
+                      padding: '0.3rem 0.65rem',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      borderRadius: 4,
+                      border: 'none',
+                      background: statusFilter === status ? 'hsl(var(--primary))' : 'transparent',
+                      color: statusFilter === status ? '#fff' : 'hsl(var(--muted-foreground))',
+                      cursor: 'pointer',
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {recentSends.map((send: any) => (
-              <div
-                key={send.id}
+            {filteredSends.map((send: any) => {
+              const isFailed = send.status === 'failed';
+              const isSending = send.status === 'sending';
+              const isSent = send.status === 'sent' || (!send.status && !isFailed);
+
+              return (
+                <div
+                  key={send.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '1rem', borderRadius: 8, background: 'hsl(var(--secondary))',
+                    border: `1px solid ${isFailed ? 'hsl(0 84% 60% / 0.4)' : 'hsl(var(--border))'}`
+                  }}
+                >
+                  <div style={{ flex: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
+                      <p style={{ fontWeight: 600, fontSize: '0.9rem', margin: 0 }}>
+                        {send.recipient_email}
+                      </p>
+                      {isFailed && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'hsl(0 84% 60%)', background: 'hsl(0 84% 60% / 0.12)', padding: '0.15rem 0.45rem', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <FiXCircle size={11} /> Failed
+                        </span>
+                      )}
+                      {isSending && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'hsl(38 92% 50%)', background: 'hsl(38 92% 50% / 0.12)', padding: '0.15rem 0.45rem', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <FiClock size={11} /> Sending
+                        </span>
+                      )}
+                      {isSent && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'hsl(142 71% 45%)', background: 'hsl(142 71% 45% / 0.12)', padding: '0.15rem 0.45rem', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <FiCheckCircle size={11} /> Sent
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-muted" style={{ fontSize: '0.8rem', margin: '0.2rem 0' }}>
+                      Subject: {send.subject}
+                    </p>
+                    <p className="text-muted" style={{ fontSize: '0.75rem', margin: '0.2rem 0 0' }}>
+                      Sent: {formatDate(send.sent_at)} via {(send.marketing_senders as any)?.display_name || 'PromptLine System'}
+                    </p>
+                    {isFailed && send.error_message && (
+                      <p style={{ fontSize: '0.75rem', color: 'hsl(0 84% 60%)', marginTop: '0.35rem', background: 'hsl(0 84% 60% / 0.08)', padding: '0.3rem 0.5rem', borderRadius: 4 }}>
+                        Error: {send.error_message}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
+                    {send.opened_at ? (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(142 71% 45%)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(142 71% 45%)' }}></span>
+                        Opened ({formatDate(send.opened_at)})
+                      </span>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--muted-foreground))' }}></span>
+                        Not Opened
+                      </span>
+                    )}
+
+                    {send.clicked_at ? (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(260 80% 60%)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(260 80% 60%)' }}></span>
+                        Clicked ({formatDate(send.clicked_at)})
+                      </span>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--muted-foreground))' }}></span>
+                        Not Clicked
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {filteredSends.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))', fontSize: '0.9rem' }}>
+                No emails match your filter.
+              </div>
+            )}
+          </div>
+
+          {/* Load More & Load All Controls */}
+          {recentSends.length < totalSendCount && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoadingMore(true);
+                  try {
+                    const { data: moreSends } = await supabase
+                      .from('email_sends')
+                      .select('id, recipient_email, subject, status, sent_at, opened_at, clicked_at, sender_id, error_message, marketing_senders(display_name, email)')
+                      .order('sent_at', { ascending: false })
+                      .range(recentSends.length, recentSends.length + SENDS_PER_PAGE - 1);
+                    if (moreSends && moreSends.length > 0) {
+                      setRecentSends(prev => [...prev, ...moreSends]);
+                    }
+                  } catch (err) {
+                    console.error('Failed to load more sends:', err);
+                  } finally {
+                    setLoadingMore(false);
+                  }
+                }}
+                disabled={loadingMore}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '1rem', borderRadius: 8, background: 'hsl(var(--secondary))',
-                  border: '1px solid hsl(var(--border))'
+                  padding: '0.6rem 1.5rem',
+                  borderRadius: 8,
+                  background: 'hsl(var(--secondary))',
+                  border: '1px solid hsl(var(--border))',
+                  color: 'hsl(var(--foreground))',
+                  cursor: loadingMore ? 'wait' : 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  opacity: loadingMore ? 0.6 : 1,
+                  transition: 'all 0.2s',
                 }}
               >
-                <div style={{ flex: 2 }}>
-                  <p style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.2rem' }}>
-                    {send.recipient_email}
-                  </p>
-                  <p className="text-muted" style={{ fontSize: '0.8rem' }}>
-                    Subject: {send.subject}
-                  </p>
-                  <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                    Sent: {formatDate(send.sent_at)} via {(send.marketing_senders as any)?.display_name}
-                  </p>
-                </div>
-                
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
-                  {send.opened_at ? (
-                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(142 71% 45%)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(142 71% 45%)' }}></span>
-                      Opened ({formatDate(send.opened_at)})
-                    </span>
-                  ) : (
-                    <span className="text-muted" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--muted-foreground))' }}></span>
-                      Not Opened
-                    </span>
-                  )}
+                {loadingMore ? 'Loading...' : `Load More (${totalSendCount - recentSends.length} remaining)`}
+              </button>
 
-                  {send.clicked_at ? (
-                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(260 80% 60%)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(260 80% 60%)' }}></span>
-                      Clicked ({formatDate(send.clicked_at)})
-                    </span>
-                  ) : (
-                    <span className="text-muted" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--muted-foreground))' }}></span>
-                      Not Clicked
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoadingMore(true);
+                  try {
+                    const { data: allRemaining } = await supabase
+                      .from('email_sends')
+                      .select('id, recipient_email, subject, status, sent_at, opened_at, clicked_at, sender_id, error_message, marketing_senders(display_name, email)')
+                      .order('sent_at', { ascending: false })
+                      .range(recentSends.length, totalSendCount);
+                    if (allRemaining && allRemaining.length > 0) {
+                      setRecentSends(prev => [...prev, ...allRemaining]);
+                    }
+                  } catch (err) {
+                    console.error('Failed to load all sends:', err);
+                  } finally {
+                    setLoadingMore(false);
+                  }
+                }}
+                disabled={loadingMore}
+                style={{
+                  padding: '0.6rem 1.5rem',
+                  borderRadius: 8,
+                  background: 'hsl(var(--primary))',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: loadingMore ? 'wait' : 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  opacity: loadingMore ? 0.6 : 1,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {loadingMore ? 'Loading...' : 'Load All History'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
