@@ -1,10 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiPause, FiTag, FiAlertTriangle, FiSearch, FiCheckSquare, FiSquare, FiSliders, FiList } from 'react-icons/fi';
+import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiPause, FiTag, FiAlertTriangle, FiSearch, FiCheckSquare, FiSquare, FiSliders, FiList, FiPlus, FiSettings, FiCalendar } from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
 
+export type ReplyTagItem = {
+  id: string;
+  label: string;
+  name: string;
+  emoji?: string;
+  actionType: 'positive' | 'reminder' | 'unsubscribe' | 'custom';
+  reminderInterval?: 'feb' | 'apr' | '2w' | '1m' | '3m' | '6m' | 'custom';
+  customReminderDate?: string;
+  isDefault?: boolean;
+};
+
+export const DEFAULT_REPLY_TAGS: ReplyTagItem[] = [
+  { id: 'interested', label: '✅ Interested', name: 'Interested', emoji: '✅', actionType: 'positive', isDefault: true },
+  { id: 'not-now-spring', label: '🌱 Not now — remind in Feb (spring)', name: 'Remind in Feb (spring)', emoji: '🌱', actionType: 'reminder', reminderInterval: 'feb', isDefault: true },
+  { id: 'not-now-summer', label: '☀️ Not now — remind in Apr (summer)', name: 'Remind in Apr (summer)', emoji: '☀️', actionType: 'reminder', reminderInterval: 'apr', isDefault: true },
+  { id: 'unsubscribed', label: '🚫 Unsubscribed', name: 'Unsubscribed', emoji: '🚫', actionType: 'unsubscribe', isDefault: true },
+];
 
 export const CampaignDetailPage = () => {
   const { id } = useParams();
@@ -59,6 +76,89 @@ export const CampaignDetailPage = () => {
   // Reply Tagger State
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [taggingId, setTaggingId] = useState<string | null>(null);
+
+  // Customizable Reply Tags State
+  const [replyTags, setReplyTags] = useState<ReplyTagItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('promptline_reply_tags_custom');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse saved reply tags', e);
+    }
+    return DEFAULT_REPLY_TAGS;
+  });
+
+  const [showTagManagerModal, setShowTagManagerModal] = useState(false);
+  const [showAddTagModal, setShowAddTagModal] = useState(false);
+  const [targetEnrollmentForNewTag, setTargetEnrollmentForNewTag] = useState<{ id: string; contactId: string } | null>(null);
+
+  // New Tag form state
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagEmoji, setNewTagEmoji] = useState('🏷️');
+  const [newTagActionType, setNewTagActionType] = useState<'positive' | 'reminder' | 'unsubscribe' | 'custom'>('custom');
+  const [newTagReminderInterval, setNewTagReminderInterval] = useState<'feb' | 'apr' | '2w' | '1m' | '3m' | '6m' | 'custom'>('1m');
+  const [newTagCustomDate, setNewTagCustomDate] = useState('');
+
+  const saveReplyTags = (newTags: ReplyTagItem[]) => {
+    setReplyTags(newTags);
+    try {
+      localStorage.setItem('promptline_reply_tags_custom', JSON.stringify(newTags));
+    } catch (e) {
+      console.warn('Failed to save reply tags to localStorage', e);
+    }
+  };
+
+  const handleCreateCustomTag = (applyImmediately = false) => {
+    if (!newTagName.trim()) {
+      alert('Please enter a tag name');
+      return;
+    }
+
+    const cleanName = newTagName.trim();
+    const tagId = 'tag_' + cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '_' + Date.now().toString().slice(-4);
+    const label = `${newTagEmoji || '🏷️'} ${cleanName}`;
+
+    const createdTag: ReplyTagItem = {
+      id: tagId,
+      name: cleanName,
+      emoji: newTagEmoji || '🏷️',
+      label,
+      actionType: newTagActionType,
+      reminderInterval: newTagActionType === 'reminder' ? newTagReminderInterval : undefined,
+      customReminderDate: newTagActionType === 'reminder' && newTagReminderInterval === 'custom' ? newTagCustomDate : undefined,
+      isDefault: false,
+    };
+
+    const updatedTags = [...replyTags, createdTag];
+    saveReplyTags(updatedTags);
+
+    if (applyImmediately && targetEnrollmentForNewTag) {
+      handleTagEnrollment(targetEnrollmentForNewTag.id, createdTag.id, targetEnrollmentForNewTag.contactId, updatedTags);
+    }
+
+    // Reset form
+    setNewTagName('');
+    setNewTagEmoji('🏷️');
+    setNewTagActionType('custom');
+    setNewTagReminderInterval('1m');
+    setNewTagCustomDate('');
+    setShowAddTagModal(false);
+    setTargetEnrollmentForNewTag(null);
+  };
+
+  const handleDeleteCustomTag = (tagId: string) => {
+    if (!confirm('Are you sure you want to delete this custom tag?')) return;
+    const updated = replyTags.filter(t => t.id !== tagId);
+    saveReplyTags(updated);
+  };
+
+  const handleResetDefaultTags = () => {
+    if (!confirm('Reset tags back to defaults? All custom tags will be removed.')) return;
+    saveReplyTags(DEFAULT_REPLY_TAGS);
+  };
 
   // Test Send State
   const [testSendModalOpen, setTestSendModalOpen] = useState(false);
@@ -479,32 +579,84 @@ export const CampaignDetailPage = () => {
     }
   };
 
-  const handleTagEnrollment = async (enrollmentId: string, tag: string, contactId: string) => {
+  const handleTagEnrollment = async (enrollmentId: string, tagId: string, contactId: string, customTagsList?: ReplyTagItem[]) => {
     setTaggingId(enrollmentId);
     try {
-      // Determine seasonal reminder date
+      const tagsList = customTagsList || replyTags;
+      const tagObj = tagsList.find(t => t.id === tagId) || {
+        id: tagId,
+        label: tagId,
+        name: tagId,
+        actionType: 'custom' as const,
+      };
+
+      // Determine reminder date if actionType is reminder
       let reminderAt: string | null = null;
-      if (tag === 'not-now-spring') {
-        const feb = new Date(); feb.setMonth(1); feb.setDate(15); feb.setFullYear(feb.getFullYear() + (feb < new Date() ? 1 : 0));
-        reminderAt = feb.toISOString();
-      } else if (tag === 'not-now-summer') {
-        const apr = new Date(); apr.setMonth(3); apr.setDate(15); apr.setFullYear(apr.getFullYear() + (apr < new Date() ? 1 : 0));
-        reminderAt = apr.toISOString();
+      if (tagObj.actionType === 'reminder') {
+        const now = new Date();
+        if (tagObj.reminderInterval === 'feb') {
+          const feb = new Date(); feb.setMonth(1); feb.setDate(15); feb.setFullYear(feb.getFullYear() + (feb < new Date() ? 1 : 0));
+          reminderAt = feb.toISOString();
+        } else if (tagObj.reminderInterval === 'apr') {
+          const apr = new Date(); apr.setMonth(3); apr.setDate(15); apr.setFullYear(apr.getFullYear() + (apr < new Date() ? 1 : 0));
+          reminderAt = apr.toISOString();
+        } else if (tagObj.reminderInterval === '2w') {
+          reminderAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        } else if (tagObj.reminderInterval === '1m') {
+          const d = new Date(); d.setMonth(d.getMonth() + 1); reminderAt = d.toISOString();
+        } else if (tagObj.reminderInterval === '3m') {
+          const d = new Date(); d.setMonth(d.getMonth() + 3); reminderAt = d.toISOString();
+        } else if (tagObj.reminderInterval === '6m') {
+          const d = new Date(); d.setMonth(d.getMonth() + 6); reminderAt = d.toISOString();
+        } else if (tagObj.customReminderDate) {
+          reminderAt = new Date(tagObj.customReminderDate).toISOString();
+        }
       }
 
-      // Exit the enrollment
-      await supabase.from('campaign_enrollments')
-        .update({ status: 'exited', reply_tag: tag, reminder_at: reminderAt })
+      // Exit the enrollment in Supabase
+      const isStandardTag = ['interested', 'not-now-spring', 'not-now-summer', 'unsubscribed'].includes(tagObj.id);
+      const fallbackTag = tagObj.actionType === 'unsubscribe' ? 'unsubscribed' : tagObj.actionType === 'reminder' ? 'not-now-spring' : 'interested';
+
+      // Try with exact tag id first
+      const { error: firstErr } = await supabase.from('campaign_enrollments')
+        .update({ status: 'exited', reply_tag: tagObj.id, reply_notes: tagObj.label, reminder_at: reminderAt })
         .eq('id', enrollmentId);
 
-      // If unsubscribed, suppress the contact
-      if (tag === 'unsubscribed') {
-        await supabase.from('email_contacts')
-          .update({ engagement_state: 'suppressed', unsubscribed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq('id', contactId);
+      if (firstErr) {
+        // Fallback to standard reply_tag with custom label in reply_notes to satisfy DB constraint if needed
+        const { error: secondErr } = await supabase.from('campaign_enrollments')
+          .update({
+            status: 'exited',
+            reply_tag: isStandardTag ? tagObj.id : fallbackTag,
+            reply_notes: tagObj.label,
+            reminder_at: reminderAt,
+          })
+          .eq('id', enrollmentId);
+        if (secondErr) throw secondErr;
       }
 
-      // Remove from local state
+      // Update contact in email_contacts (append tag and sync engagement state)
+      try {
+        const { data: cData } = await supabase.from('email_contacts').select('tags, engagement_state').eq('id', contactId).single();
+        if (cData) {
+          const existingTags: string[] = Array.isArray(cData.tags) ? cData.tags : [];
+          const cleanTagName = tagObj.name || tagObj.label.replace(/^[^\w\s]+/, '').trim();
+          const newTags = Array.from(new Set([...existingTags, cleanTagName]));
+
+          const contactUpdates: any = { tags: newTags, updated_at: new Date().toISOString() };
+          if (tagObj.actionType === 'unsubscribe') {
+            contactUpdates.engagement_state = 'suppressed';
+            contactUpdates.unsubscribed_at = new Date().toISOString();
+          } else if (tagObj.actionType === 'positive') {
+            contactUpdates.engagement_state = 'hot';
+          }
+          await supabase.from('email_contacts').update(contactUpdates).eq('id', contactId);
+        }
+      } catch (cErr) {
+        console.warn('Failed to update contact tags in CRM:', cErr);
+      }
+
+      // Remove from local active enrollments state
       setEnrollments(prev => prev.filter(e => e.id !== enrollmentId));
     } catch (err: any) {
       reportError(err, { where: 'CampaignDetailPage.tagEnrollment' });
@@ -872,12 +1024,24 @@ export const CampaignDetailPage = () => {
       {/* Live Sequence — Active Enrollments Reply Tagger */}
       {campaign.type === 'sequence' && campaign.status === 'live' && enrollments.filter(e => e.status === 'active').length > 0 && (
         <div className="page-card" style={{ padding: '2rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FiTag /> Active Prospects — Reply Actions
-          </h2>
-          <p className="text-muted" style={{ marginBottom: '1rem', fontSize: '0.875rem' }}>
-            When a prospect replies, select the appropriate tag to exit them from the sequence.
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiTag /> Active Prospects — Reply Actions
+              </h2>
+              <p className="text-muted" style={{ margin: '0.35rem 0 0', fontSize: '0.875rem' }}>
+                When a prospect replies, select the appropriate tag to exit them from the sequence.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              onClick={() => setShowTagManagerModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.825rem', padding: '0.45rem 0.9rem' }}
+            >
+              <FiSettings size={14} /> Customize Reply Tags
+            </button>
+          </div>
           <table className="data-table">
             <thead>
               <tr>
@@ -901,24 +1065,43 @@ export const CampaignDetailPage = () => {
                   <td>
                     <select
                       className="form-input"
-                      style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', minWidth: 210, cursor: 'pointer' }}
                       defaultValue=""
                       disabled={taggingId === enr.id}
                       onChange={e => {
-                        const tag = e.target.value;
-                        if (!tag) return;
-                        if (confirm(`Tag this prospect as "${tag}" and exit the sequence?`)) {
-                          handleTagEnrollment(enr.id, tag, enr.contact_id);
+                        const val = e.target.value;
+                        if (!val) return;
+                        if (val === '__add_custom__') {
+                          setTargetEnrollmentForNewTag({ id: enr.id, contactId: enr.contact_id });
+                          setShowAddTagModal(true);
+                          e.target.value = '';
+                          return;
+                        }
+                        if (val === '__manage_tags__') {
+                          setShowTagManagerModal(true);
+                          e.target.value = '';
+                          return;
+                        }
+
+                        const tagObj = replyTags.find(t => t.id === val);
+                        if (!tagObj) return;
+
+                        if (confirm(`Tag this prospect as "${tagObj.label}" and exit the sequence?`)) {
+                          handleTagEnrollment(enr.id, val, enr.contact_id);
                         } else {
                           e.target.value = '';
                         }
                       }}
                     >
                       <option value="">— Tag reply —</option>
-                      <option value="interested">✅ Interested</option>
-                      <option value="not-now-spring">🌱 Not now — remind in Feb (spring)</option>
-                      <option value="not-now-summer">☀️ Not now — remind in Apr (summer)</option>
-                      <option value="unsubscribed">🚫 Unsubscribed</option>
+                      {replyTags.map(tag => (
+                        <option key={tag.id} value={tag.id}>
+                          {tag.label}
+                        </option>
+                      ))}
+                      <option disabled>──────────</option>
+                      <option value="__add_custom__">➕ + Add custom tag...</option>
+                      <option value="__manage_tags__">⚙️ Customize tags...</option>
                     </select>
                   </td>
                 </tr>
@@ -1583,6 +1766,333 @@ export const CampaignDetailPage = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Customize Reply Tags Manager Modal */}
+      {showTagManagerModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120 }}>
+          <div className="page-card" style={{ width: 560, maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', background: 'hsl(var(--background))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FiSettings /> Customize Reply Tags
+                </h2>
+                <p className="text-muted" style={{ fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
+                  Configure tags used to categorize prospect replies and exit sequences.
+                </p>
+              </div>
+              <button
+                type="button"
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}
+                onClick={() => setShowTagManagerModal(false)}
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            {/* Tags List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '1.5rem' }}>
+              {replyTags.map(tag => {
+                const isDefault = tag.isDefault;
+                return (
+                  <div
+                    key={tag.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.75rem 1rem',
+                      background: 'hsl(var(--secondary) / 0.5)',
+                      borderRadius: 8,
+                      border: '1px solid hsl(var(--border))'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ fontSize: '1.25rem' }}>{tag.emoji || '🏷️'}</span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                          {tag.name || tag.label}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.15rem' }}>
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              padding: '0.1rem 0.45rem',
+                              borderRadius: 4,
+                              background: tag.actionType === 'positive' 
+                                ? 'hsl(142 71% 45% / 0.15)' 
+                                : tag.actionType === 'reminder' 
+                                ? 'hsl(38 92% 50% / 0.15)' 
+                                : tag.actionType === 'unsubscribe' 
+                                ? 'hsl(0 84% 60% / 0.15)' 
+                                : 'hsl(260 80% 60% / 0.15)',
+                              color: tag.actionType === 'positive' 
+                                ? 'hsl(142 71% 45%)' 
+                                : tag.actionType === 'reminder' 
+                                ? 'hsl(38 92% 50%)' 
+                                : tag.actionType === 'unsubscribe' 
+                                ? 'hsl(0 84% 60%)' 
+                                : 'hsl(260 80% 60%)',
+                            }}
+                          >
+                            {tag.actionType === 'positive' && 'Interested / Hot'}
+                            {tag.actionType === 'reminder' && `Remind Later (${tag.reminderInterval || 'custom'})`}
+                            {tag.actionType === 'unsubscribe' && 'Unsubscribe / Suppress'}
+                            {tag.actionType === 'custom' && 'Custom Action'}
+                          </span>
+                          {isDefault && (
+                            <span className="text-muted" style={{ fontSize: '0.7rem' }}>
+                              • System Default
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {!isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustomTag(tag.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'hsl(var(--destructive))',
+                          cursor: 'pointer',
+                          padding: '0.35rem',
+                          borderRadius: 4,
+                        }}
+                        title="Delete custom tag"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Actions Footer */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid hsl(var(--border))', paddingTop: '1.25rem' }}>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={handleResetDefaultTags}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
+              >
+                Reset to Defaults
+              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => {
+                    setShowTagManagerModal(false);
+                    setShowAddTagModal(true);
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.825rem' }}
+                >
+                  <FiPlus size={14} /> Add New Tag
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  onClick={() => setShowTagManagerModal(false)}
+                  style={{ fontSize: '0.825rem' }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Custom Reply Tag Modal */}
+      {showAddTagModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 130 }}>
+          <div className="page-card" style={{ width: 480, maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', background: 'hsl(var(--background))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiPlus /> Add Custom Reply Tag
+              </h2>
+              <button
+                type="button"
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}
+                onClick={() => {
+                  setShowAddTagModal(false);
+                  setTargetEnrollmentForNewTag(null);
+                }}
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleCreateCustomTag(!!targetEnrollmentForNewTag);
+              }}
+            >
+              {/* Tag Name */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Tag Name *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Demo Booked, Bad Timing, Referral, Pricing Question"
+                  value={newTagName}
+                  onChange={e => setNewTagName(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              {/* Emoji Picker */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Emoji Icon</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={newTagEmoji}
+                    onChange={e => setNewTagEmoji(e.target.value)}
+                    style={{ width: 60, textAlign: 'center', fontSize: '1.2rem', padding: '0.3rem' }}
+                    maxLength={4}
+                  />
+                  <span className="text-muted" style={{ fontSize: '0.8rem' }}>Pick an icon below or type any emoji</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  {['🎯', '📅', '🤝', '✅', '❌', '💰', '📞', '⏳', '🍂', '☀️', '🌱', '❄️', '🚫', '🏷️', '💼', '⭐'].map(emoji => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setNewTagEmoji(emoji)}
+                      style={{
+                        padding: '0.35rem 0.5rem',
+                        fontSize: '1.1rem',
+                        background: newTagEmoji === emoji ? 'hsl(var(--primary) / 0.2)' : 'hsl(var(--secondary))',
+                        border: newTagEmoji === emoji ? '1px solid hsl(var(--primary))' : '1px solid hsl(var(--border))',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Behavior */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Action Behavior</label>
+                <p className="text-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.5rem' }}>
+                  What should happen when this tag is selected for a prospect?
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {[
+                    { type: 'positive', label: '🎯 Interested / Positive', desc: 'Exits sequence and updates prospect status to Hot' },
+                    { type: 'reminder', label: '⏳ Remind Later', desc: 'Exits sequence and schedules a follow-up reminder' },
+                    { type: 'unsubscribe', label: '🚫 Unsubscribe / Suppress', desc: 'Exits sequence and marks prospect suppressed from all future emails' },
+                    { type: 'custom', label: '🏷️ Custom Tag & Exit', desc: 'Exits sequence and attaches this custom tag to contact in CRM' },
+                  ].map(opt => (
+                    <label
+                      key={opt.type}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.65rem',
+                        padding: '0.65rem 0.85rem',
+                        background: newTagActionType === opt.type ? 'hsl(var(--primary) / 0.08)' : 'hsl(var(--secondary) / 0.4)',
+                        border: newTagActionType === opt.type ? '1px solid hsl(var(--primary))' : '1px solid hsl(var(--border))',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="actionType"
+                        value={opt.type}
+                        checked={newTagActionType === opt.type}
+                        onChange={() => setNewTagActionType(opt.type as any)}
+                        style={{ marginTop: 3 }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{opt.label}</div>
+                        <div className="text-muted" style={{ fontSize: '0.75rem' }}>{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* If Reminder: Interval selector */}
+              {newTagActionType === 'reminder' && (
+                <div style={{ marginBottom: '1.25rem', padding: '0.85rem', background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8, border: '1px solid hsl(var(--border))' }}>
+                  <label className="form-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <FiCalendar size={14} /> Reminder Interval
+                  </label>
+                  <select
+                    className="form-input"
+                    value={newTagReminderInterval}
+                    onChange={e => setNewTagReminderInterval(e.target.value as any)}
+                    style={{ marginBottom: newTagReminderInterval === 'custom' ? '0.75rem' : 0 }}
+                  >
+                    <option value="2w">In 2 Weeks</option>
+                    <option value="1m">In 1 Month</option>
+                    <option value="3m">In 3 Months</option>
+                    <option value="6m">In 6 Months</option>
+                    <option value="feb">Next Spring (Feb 15)</option>
+                    <option value="apr">Next Summer (Apr 15)</option>
+                    <option value="custom">Specific Custom Date...</option>
+                  </select>
+
+                  {newTagReminderInterval === 'custom' && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Select Reminder Date</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={newTagCustomDate}
+                        onChange={e => setNewTagCustomDate(e.target.value)}
+                        required={newTagReminderInterval === 'custom'}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Preview */}
+              <div style={{ background: 'hsl(var(--secondary) / 0.5)', padding: '0.75rem 1rem', borderRadius: 8, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span className="text-muted" style={{ fontSize: '0.8rem' }}>Dropdown Preview:</span>
+                <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                  {newTagEmoji || '🏷️'} {newTagName.trim() || 'Custom Tag Name'}
+                </span>
+              </div>
+
+              {/* Footer */}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  onClick={() => {
+                    setShowAddTagModal(false);
+                    setTargetEnrollmentForNewTag(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={!newTagName.trim()}
+                >
+                  {targetEnrollmentForNewTag ? 'Save & Tag Prospect' : 'Save Tag'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
