@@ -9,6 +9,7 @@ import type { EmailContact } from '@/types/domain';
 import {
   FiRefreshCw, FiUpload, FiDownload,
   FiX, FiCheck, FiAlertCircle, FiExternalLink, FiTag, FiPlay, FiUserPlus, FiPlus,
+  FiClock, FiMail, FiList,
 } from 'react-icons/fi';
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -21,6 +22,22 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+const fmtDateTime = (iso: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+};
+
+// Timeline event types
+type TimelineEvent = {
+  id: string;
+  kind: 'enrolled' | 'email_sent' | 'email_failed' | 'suppressed' | 'completed';
+  label: string;
+  detail?: string;
+  timestamp: string;
+};
 
 // RFC-4180 compliant CSV parser that correctly handles quoted strings containing commas
 const parseCsvLine = (line: string): string[] => {
@@ -93,6 +110,19 @@ export const ContactsPage = () => {
   const [batchTagAction, setBatchTagAction] = useState<'add' | 'remove'>('add');
   const [savingBatchTags, setSavingBatchTags] = useState(false);
 
+  // Enrollment map: contactId -> { campaignName, stepNumber, status, nextRunAt }
+  const [enrollmentMap, setEnrollmentMap] = useState<Record<string, {
+    campaignName: string;
+    stepNumber: number;
+    status: string;
+    nextRunAt: string | null;
+  }[]>>({});
+
+  // Timeline drawer
+  const [timelineContact, setTimelineContact] = useState<EmailContact | null>(null);
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+
   const loadContacts = useCallback(async () => {
     setLoading(true);
     try {
@@ -102,6 +132,27 @@ export const ContactsPage = () => {
         .order('created_at', { ascending: false });
       if (error) throw error;
       setContacts((data ?? []) as EmailContact[]);
+
+      // Fetch active enrollments with campaign names (read-only, zero production impact)
+      const { data: enrollments } = await supabase
+        .from('campaign_enrollments')
+        .select('contact_id, current_step_number, status, next_run_at, marketing_campaigns(name)')
+        .in('status', ['active', 'completed', 'suppressed']);
+
+      if (enrollments) {
+        const map: Record<string, { campaignName: string; stepNumber: number; status: string; nextRunAt: string | null }[]> = {};
+        for (const e of enrollments as any[]) {
+          const cid = e.contact_id as string;
+          if (!map[cid]) map[cid] = [];
+          map[cid].push({
+            campaignName: (e.marketing_campaigns as any)?.name ?? 'Unknown',
+            stepNumber: e.current_step_number,
+            status: e.status,
+            nextRunAt: e.next_run_at,
+          });
+        }
+        setEnrollmentMap(map);
+      }
     } catch (err) {
       reportError(err, { where: 'ContactsPage.load' });
       toast('Failed to load contacts', 'error');
@@ -111,6 +162,76 @@ export const ContactsPage = () => {
   }, [toast]);
 
   useEffect(() => { loadContacts(); }, [loadContacts]);
+
+  // Open timeline drawer for a contact
+  const openTimeline = async (contact: EmailContact) => {
+    setTimelineContact(contact);
+    setTimelineEvents([]);
+    setTimelineLoading(true);
+
+    try {
+      const events: TimelineEvent[] = [];
+
+      // 1. Fetch enrollments (with campaign name and step)
+      const { data: enrollments } = await supabase
+        .from('campaign_enrollments')
+        .select('id, current_step_number, status, next_run_at, enrolled_at, marketing_campaigns(name)')
+        .eq('contact_id', contact.id)
+        .order('enrolled_at', { ascending: true });
+
+      for (const enr of (enrollments as any[]) ?? []) {
+        const campName = (enr.marketing_campaigns as any)?.name ?? 'Unknown Sequence';
+        events.push({
+          id: `enr-enrolled-${enr.id}`,
+          kind: 'enrolled',
+          label: `Added to sequence "${campName}"`,
+          timestamp: enr.enrolled_at,
+        });
+        if (enr.status === 'suppressed') {
+          events.push({
+            id: `enr-suppressed-${enr.id}`,
+            kind: 'suppressed',
+            label: `Removed from sequence "${campName}"`,
+            detail: 'Suppressed / unsubscribed',
+            timestamp: enr.next_run_at ?? enr.enrolled_at,
+          });
+        }
+        if (enr.status === 'completed') {
+          events.push({
+            id: `enr-completed-${enr.id}`,
+            kind: 'completed',
+            label: `Completed sequence "${campName}"`,
+            timestamp: enr.next_run_at ?? enr.enrolled_at,
+          });
+        }
+      }
+
+      // 2. Fetch all emails sent to this contact
+      const { data: sends } = await supabase
+        .from('email_sends')
+        .select('id, subject, status, created_at, is_cold_sequence')
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: true });
+
+      for (const s of (sends as any[]) ?? []) {
+        events.push({
+          id: `send-${s.id}`,
+          kind: s.status === 'sent' ? 'email_sent' : 'email_failed',
+          label: s.status === 'sent' ? `Email sent` : `Email failed to send`,
+          detail: s.subject,
+          timestamp: s.created_at,
+        });
+      }
+
+      // Sort all events chronologically
+      events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      setTimelineEvents(events);
+    } catch (err) {
+      reportError(err, { where: 'ContactsPage.openTimeline' });
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchSequences = async () => {
@@ -794,17 +915,70 @@ export const ContactsPage = () => {
       ),
     },
     {
+      header: 'Sequence & Stage',
+      id: 'sequence_stage',
+      sortable: false,
+      cell: (row) => {
+        const enrs = enrollmentMap[row.id] ?? [];
+        if (enrs.length === 0) return <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            {enrs.map((enr, i) => {
+              const isActive = enr.status === 'active';
+              const isCompleted = enr.status === 'completed';
+              return (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                  <span style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    color: isCompleted ? 'hsl(var(--muted-foreground))' : 'hsl(var(--foreground))',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: 160,
+                  }} title={enr.campaignName}>{enr.campaignName}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span style={{
+                      fontSize: '0.65rem',
+                      padding: '0.1rem 0.35rem',
+                      borderRadius: 4,
+                      fontWeight: 600,
+                      background: isActive ? 'hsl(217 91% 60% / 0.12)' : isCompleted ? 'hsl(142 71% 45% / 0.1)' : 'hsl(var(--destructive) / 0.1)',
+                      color: isActive ? 'hsl(217 91% 60%)' : isCompleted ? 'hsl(142 71% 45%)' : 'hsl(var(--destructive))',
+                    }}>
+                      {isActive ? `Day ${enr.stepNumber} (waiting)` : isCompleted ? 'Completed' : enr.status}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      },
+    },
+    {
       header: 'Actions', id: 'actions', sortable: false,
       cell: (row) => (
-        <button
-          type="button"
-          className="btn btn--secondary"
-          style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-          onClick={(e) => { e.stopPropagation(); openEditContactModal(row); }}
-          title="Edit contact details and tags"
-        >
-          <FiTag size={11} /> Edit
-        </button>
+        <div style={{ display: 'flex', gap: '0.3rem' }}>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            onClick={(e) => { e.stopPropagation(); openTimeline(row); }}
+            title="View activity timeline"
+          >
+            <FiClock size={11} /> Timeline
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            onClick={(e) => { e.stopPropagation(); openEditContactModal(row); }}
+            title="Edit contact details and tags"
+          >
+            <FiTag size={11} /> Edit
+          </button>
+        </div>
       ),
     },
   ];
@@ -1378,6 +1552,188 @@ export const ContactsPage = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Lead Activity Timeline Drawer ─────────────────────────────── */}
+      {timelineContact && (
+        <div
+          style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0, width: 480,
+            background: 'hsl(var(--background))',
+            borderLeft: '1px solid hsl(var(--border))',
+            boxShadow: '-8px 0 32px rgba(0,0,0,0.18)',
+            zIndex: 200,
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'slideInRight 0.22s ease',
+          }}
+        >
+          <style>{`
+            @keyframes slideInRight {
+              from { transform: translateX(100%); opacity: 0; }
+              to   { transform: translateX(0);    opacity: 1; }
+            }
+            .tl-event { display: flex; gap: 0.75rem; position: relative; padding-bottom: 1.4rem; }
+            .tl-event:not(:last-child)::before {
+              content: '';
+              position: absolute;
+              left: 11px;
+              top: 24px;
+              bottom: 0;
+              width: 2px;
+              background: hsl(var(--border));
+            }
+            .tl-dot {
+              flex-shrink: 0;
+              width: 24px;
+              height: 24px;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin-top: 2px;
+            }
+          `}</style>
+
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+            padding: '1.25rem 1.25rem 1rem',
+            borderBottom: '1px solid hsl(var(--border))',
+            gap: '1rem',
+          }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                {timelineContact.first_name && timelineContact.last_name
+                  ? `${timelineContact.first_name} ${timelineContact.last_name}`
+                  : timelineContact.full_name || 'Contact'}
+              </h3>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))' }}>
+                {timelineContact.email}
+              </p>
+              {timelineContact.company && (
+                <p style={{ margin: '0.1rem 0 0', fontSize: '0.78rem', fontWeight: 600 }}>
+                  {timelineContact.company}
+                </p>
+              )}
+            </div>
+            <button
+              className="icon-button"
+              onClick={() => setTimelineContact(null)}
+              style={{ flexShrink: 0 }}
+            >
+              <FiX />
+            </button>
+          </div>
+
+          {/* Active sequences summary */}
+          {(enrollmentMap[timelineContact.id] ?? []).length > 0 && (
+            <div style={{
+              margin: '0.75rem 1.25rem 0',
+              padding: '0.75rem',
+              background: 'hsl(var(--secondary))',
+              borderRadius: 8,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.4rem',
+            }}>
+              <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'hsl(var(--muted-foreground))' }}>
+                <FiList size={11} style={{ marginRight: '0.3rem', verticalAlign: 'middle' }} />
+                Current Sequences
+              </p>
+              {(enrollmentMap[timelineContact.id] ?? []).map((enr, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {enr.campaignName}
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: 4, fontWeight: 600,
+                      background: enr.status === 'active' ? 'hsl(217 91% 60% / 0.15)' : enr.status === 'completed' ? 'hsl(142 71% 45% / 0.12)' : 'hsl(var(--destructive) / 0.1)',
+                      color: enr.status === 'active' ? 'hsl(217 91% 60%)' : enr.status === 'completed' ? 'hsl(142 71% 45%)' : 'hsl(var(--destructive))',
+                    }}>
+                      {enr.status === 'active' ? `Step ${enr.stepNumber}` : enr.status}
+                    </span>
+                    {enr.nextRunAt && enr.status === 'active' && (
+                      <span style={{ fontSize: '0.65rem', color: 'hsl(var(--muted-foreground))' }}>
+                        Next: {fmtDate(enr.nextRunAt)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Timeline */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem 1.5rem' }}>
+            <p style={{ margin: '0 0 1rem', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'hsl(var(--muted-foreground))' }}>
+              <FiClock size={11} style={{ marginRight: '0.3rem', verticalAlign: 'middle' }} />
+              Activity Timeline
+            </p>
+
+            {timelineLoading ? (
+              <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem' }}>Loading timeline…</p>
+            ) : timelineEvents.length === 0 ? (
+              <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem' }}>No activity recorded yet.</p>
+            ) : (
+              <div>
+                {timelineEvents.map((ev) => {
+                  const dotColor =
+                    ev.kind === 'enrolled'      ? 'hsl(217 91% 60%)' :
+                    ev.kind === 'email_sent'    ? 'hsl(142 71% 45%)' :
+                    ev.kind === 'email_failed'  ? 'hsl(0 84% 60%)' :
+                    ev.kind === 'completed'     ? 'hsl(142 71% 45%)' :
+                    'hsl(var(--muted-foreground))';
+                  const dotBg =
+                    ev.kind === 'enrolled'      ? 'hsl(217 91% 60% / 0.12)' :
+                    ev.kind === 'email_sent'    ? 'hsl(142 71% 45% / 0.12)' :
+                    ev.kind === 'email_failed'  ? 'hsl(0 84% 60% / 0.12)' :
+                    ev.kind === 'completed'     ? 'hsl(142 71% 45% / 0.12)' :
+                    'hsl(var(--secondary))';
+                  const DotIcon =
+                    ev.kind === 'enrolled'      ? FiList :
+                    ev.kind === 'email_sent'    ? FiMail :
+                    ev.kind === 'email_failed'  ? FiAlertCircle :
+                    ev.kind === 'completed'     ? FiCheck :
+                    FiX;
+                  return (
+                    <div key={ev.id} className="tl-event">
+                      <div className="tl-dot" style={{ background: dotBg }}>
+                        <DotIcon size={12} color={dotColor} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, lineHeight: 1.3 }}>{ev.label}</p>
+                        {ev.detail && (
+                          <p style={{
+                            margin: '0.2rem 0 0',
+                            fontSize: '0.74rem',
+                            color: 'hsl(var(--muted-foreground))',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: 340,
+                          }} title={ev.detail}>{ev.detail}</p>
+                        )}
+                        <p style={{ margin: '0.25rem 0 0', fontSize: '0.68rem', color: 'hsl(var(--muted-foreground))' }}>
+                          {fmtDateTime(ev.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Backdrop for timeline drawer */}
+      {timelineContact && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.3)' }}
+          onClick={() => setTimelineContact(null)}
+        />
       )}
     </div>
   );
