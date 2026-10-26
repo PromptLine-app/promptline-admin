@@ -819,6 +819,73 @@ export const ContactsPage = () => {
       cell: (row) => <span style={{ fontWeight: 500 }}>{row.company ?? <span className="text-muted">—</span>}</span>
     },
     {
+      header: 'Sequence & Stage',
+      id: 'sequence_stage',
+      sortable: false,
+      cell: (row) => {
+        const enrs = enrollmentMap[row.id] ?? [];
+        if (enrs.length === 0) return <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: 150 }}>
+            {enrs.map((enr, i) => {
+              const isActive = enr.status === 'active';
+              const isCompleted = enr.status === 'completed';
+              return (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    color: isCompleted ? 'hsl(var(--muted-foreground))' : 'hsl(var(--foreground))',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: 160,
+                  }} title={enr.campaignName}>{enr.campaignName}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span style={{
+                      fontSize: '0.68rem',
+                      padding: '0.12rem 0.4rem',
+                      borderRadius: 4,
+                      fontWeight: 600,
+                      background: isActive ? 'hsl(217 91% 60% / 0.18)' : isCompleted ? 'hsl(142 71% 45% / 0.15)' : 'hsl(var(--destructive) / 0.15)',
+                      color: isActive ? 'hsl(217 91% 60%)' : isCompleted ? 'hsl(142 71% 45%)' : 'hsl(var(--destructive))',
+                    }}>
+                      {isActive ? `Day ${enr.stepNumber} (waiting)` : isCompleted ? 'Completed' : enr.status}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Actions', id: 'actions', sortable: false,
+      cell: (row) => (
+        <div style={{ display: 'flex', gap: '0.35rem', whiteSpace: 'nowrap' }}>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}
+            onClick={(e) => { e.stopPropagation(); openTimeline(row); }}
+            title="View lead activity timeline"
+          >
+            <FiClock size={12} /> Timeline
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            onClick={(e) => { e.stopPropagation(); openEditContactModal(row); }}
+            title="Edit contact details and tags"
+          >
+            <FiTag size={12} /> Edit
+          </button>
+        </div>
+      ),
+    },
+    {
       header: 'Phone', accessorKey: 'phone',
       cell: (row) => (
         <span style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
@@ -914,77 +981,31 @@ export const ContactsPage = () => {
         </span>
       ),
     },
-    {
-      header: 'Sequence & Stage',
-      id: 'sequence_stage',
-      sortable: false,
-      cell: (row) => {
-        const enrs = enrollmentMap[row.id] ?? [];
-        if (enrs.length === 0) return <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>;
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            {enrs.map((enr, i) => {
-              const isActive = enr.status === 'active';
-              const isCompleted = enr.status === 'completed';
-              return (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                  <span style={{
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    color: isCompleted ? 'hsl(var(--muted-foreground))' : 'hsl(var(--foreground))',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: 160,
-                  }} title={enr.campaignName}>{enr.campaignName}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <span style={{
-                      fontSize: '0.65rem',
-                      padding: '0.1rem 0.35rem',
-                      borderRadius: 4,
-                      fontWeight: 600,
-                      background: isActive ? 'hsl(217 91% 60% / 0.12)' : isCompleted ? 'hsl(142 71% 45% / 0.1)' : 'hsl(var(--destructive) / 0.1)',
-                      color: isActive ? 'hsl(217 91% 60%)' : isCompleted ? 'hsl(142 71% 45%)' : 'hsl(var(--destructive))',
-                    }}>
-                      {isActive ? `Day ${enr.stepNumber} (waiting)` : isCompleted ? 'Completed' : enr.status}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Actions', id: 'actions', sortable: false,
-      cell: (row) => (
-        <div style={{ display: 'flex', gap: '0.3rem' }}>
-          <button
-            type="button"
-            className="btn btn--secondary"
-            style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-            onClick={(e) => { e.stopPropagation(); openTimeline(row); }}
-            title="View activity timeline"
-          >
-            <FiClock size={11} /> Timeline
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary"
-            style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-            onClick={(e) => { e.stopPropagation(); openEditContactModal(row); }}
-            title="Edit contact details and tags"
-          >
-            <FiTag size={11} /> Edit
-          </button>
-        </div>
-      ),
-    },
   ];
 
   return (
     <div className="page-content">
+      <style>{`
+        /* Always show custom scrollbar on table */
+        .data-table-wrapper {
+          scrollbar-width: thin;
+          scrollbar-color: hsl(var(--primary) / 0.5) hsl(var(--secondary));
+        }
+        .data-table-wrapper::-webkit-scrollbar {
+          height: 8px;
+        }
+        .data-table-wrapper::-webkit-scrollbar-track {
+          background: hsl(var(--secondary));
+          border-radius: 4px;
+        }
+        .data-table-wrapper::-webkit-scrollbar-thumb {
+          background: hsl(var(--primary) / 0.6);
+          border-radius: 4px;
+        }
+        .data-table-wrapper::-webkit-scrollbar-thumb:hover {
+          background: hsl(var(--primary));
+        }
+      `}</style>
       <PageHeader
         title="Contacts"
         subtitle={`${contacts.length.toLocaleString()} total contacts`}
