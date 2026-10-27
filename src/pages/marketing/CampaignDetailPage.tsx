@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock, FiSend, FiX, FiTrash2, FiPlay, FiPause, FiTag, FiAlertTriangle, FiSearch, FiCheckSquare, FiSquare, FiSliders, FiList, FiPlus, FiSettings, FiCalendar } from 'react-icons/fi';
+import {
+  FiArrowLeft, FiBarChart2, FiUsers, FiCheckCircle, FiXCircle, FiClock,
+  FiSend, FiX, FiTrash2, FiPlay, FiPause, FiTag, FiAlertTriangle, FiSearch,
+  FiCheckSquare, FiSquare, FiSliders, FiList, FiPlus, FiSettings, FiCalendar, FiMail
+} from 'react-icons/fi';
 import { reportError } from '@/lib/sentry';
 import type { MarketingCampaign } from '@/types/domain';
+import { CampaignSendHistory } from './CampaignSendHistory';
 
 export type ReplyTagItem = {
   id: string;
@@ -26,6 +31,9 @@ export const DEFAULT_REPLY_TAGS: ReplyTagItem[] = [
 export const CampaignDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'steps' | 'leads' | 'sends'>((tabParam as any) || 'steps');
   const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
   const [stopping, setStopping] = useState(false);
   const [stats, setStats] = useState({
@@ -911,118 +919,193 @@ export const CampaignDetailPage = () => {
         ))}
       </div>
 
-      {/* Analytics Main Section */}
-      {campaign.status !== 'draft' && campaign.type === 'sequence' && (
-        <div className="page-card" style={{ padding: '1.5rem' }}>
-          <h3 style={{ marginBottom: '1.5rem', fontWeight: 600 }}>Audience Progress (Active)</h3>
-          {Object.keys(stats.stepDistribution).length === 0 ? (
-            <div style={{ padding: '2rem', textAlign: 'center', background: 'hsl(var(--secondary))', borderRadius: 'var(--radius)' }}>
-              <p className="text-muted">No active audience data to display for this sequence.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {Object.entries(stats.stepDistribution).map(([step, count]) => {
-                const percentage = Math.round((count / stats.active) * 100) || 0;
-                return (
-                  <div key={step} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: '80px', fontWeight: 600, fontSize: '0.875rem' }}>Step {step}</div>
-                    <div style={{ flex: 1, height: '8px', background: 'hsl(var(--secondary))', borderRadius: 999, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', background: 'hsl(var(--primary))', width: `${percentage}%`, transition: 'width 1s ease-in-out' }} />
-                    </div>
-                    <div style={{ width: '100px', textAlign: 'right', fontSize: '0.875rem' }}>
-                      <span style={{ fontWeight: 600 }}>{count}</span> <span className="text-muted">({percentage}%)</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* Sequence Section Tabs */}
+      {campaign.type === 'sequence' && (
+        <div style={{
+          display: 'flex',
+          gap: '0.5rem',
+          marginBottom: '1.5rem',
+          borderBottom: '1px solid hsl(var(--border))',
+          paddingBottom: '0.75rem',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}>
+          <button
+            type="button"
+            className={`btn ${activeTab === 'steps' ? 'btn--primary' : 'btn--secondary'}`}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              borderRadius: 8,
+            }}
+            onClick={() => {
+              setActiveTab('steps');
+              setSearchParams({ tab: 'steps' });
+            }}
+          >
+            <FiClock /> Workflow & Steps ({sequenceSteps.length})
+          </button>
+
+          <button
+            type="button"
+            className={`btn ${activeTab === 'leads' ? 'btn--primary' : 'btn--secondary'}`}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              borderRadius: 8,
+            }}
+            onClick={() => {
+              setActiveTab('leads');
+              setSearchParams({ tab: 'leads' });
+            }}
+          >
+            <FiTag /> Active Prospects & Reply Tags ({enrollments.filter(e => e.status === 'active').length})
+          </button>
+
+          <button
+            type="button"
+            className={`btn ${activeTab === 'sends' ? 'btn--primary' : 'btn--secondary'}`}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              borderRadius: 8,
+            }}
+            onClick={() => {
+              setActiveTab('sends');
+              setSearchParams({ tab: 'sends' });
+            }}
+          >
+            <FiMail /> Sends & Tracking History
+          </button>
         </div>
       )}
 
-      {/* Sequence Builder UI (Phase 4) */}
-      {campaign.type === 'sequence' && (
-        <div className="page-card" style={{ padding: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiClock /> {campaign.status === 'draft' ? 'Sequence Workflow Builder' : 'Sequence Workflow Steps'}
-            </h2>
-            {campaign.status === 'draft' && (
-              <button className="btn btn--primary" onClick={() => setShowStepModal(true)}>
-                + Add Step
-              </button>
-            )}
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative' }}>
-            {sequenceSteps.length === 0 ? (
-              <div style={{ padding: '3rem', textAlign: 'center', background: 'hsl(var(--secondary))', borderRadius: 8, border: '1px dashed hsl(var(--border))' }}>
-                <p className="text-muted">No steps added yet. Add an email step to start the sequence.</p>
-              </div>
-            ) : (
-              sequenceSteps.map((step, index) => (
-                <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                  <div style={{ width: '100%', padding: '1rem', background: 'hsl(var(--secondary))', borderRadius: 8, border: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h4 style={{ fontWeight: 600 }}>Step {step.step_number}: Email Send</h4>
-                      <p className="text-muted" style={{ fontSize: '0.875rem' }}>Template: {step.email_templates?.name || 'Unknown Template'}</p>
-                      {step.subject && (
-                        <p className="text-muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
-                          Subject: <em>{step.subject}</em>
-                        </p>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <button 
-                        type="button" 
-                        className="btn btn--secondary" 
-                        style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => openTestSendForStep(step)}
-                        title="Send a test email for this step to verify merge fields and copy"
-                      >
-                        <FiSend size={12} /> Send Test Email
-                      </button>
-                      {campaign.status === 'draft' && (
+      {/* Tab 1: Sequence Steps & Progress */}
+      {campaign.type === 'sequence' && activeTab === 'steps' && (
+        <>
+          {campaign.status !== 'draft' && (
+            <div className="page-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+              <h3 style={{ marginBottom: '1.5rem', fontWeight: 600 }}>Audience Progress (Active)</h3>
+              {Object.keys(stats.stepDistribution).length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', background: 'hsl(var(--secondary))', borderRadius: 'var(--radius)' }}>
+                  <p className="text-muted">No active audience data to display for this sequence.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {Object.entries(stats.stepDistribution).map(([step, count]) => {
+                    const percentage = Math.round((count / stats.active) * 100) || 0;
+                    return (
+                      <div key={step} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ width: '80px', fontWeight: 600, fontSize: '0.875rem' }}>Step {step}</div>
+                        <div style={{ flex: 1, height: '8px', background: 'hsl(var(--secondary))', borderRadius: 999, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', background: 'hsl(var(--primary))', width: `${percentage}%`, transition: 'width 1s ease-in-out' }} />
+                        </div>
+                        <div style={{ width: '100px', textAlign: 'right', fontSize: '0.875rem' }}>
+                          <span style={{ fontWeight: 600 }}>{count}</span> <span className="text-muted">({percentage}%)</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sequence Builder UI */}
+          <div className="page-card" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiClock /> {campaign.status === 'draft' ? 'Sequence Workflow Builder' : 'Sequence Workflow Steps'}
+              </h2>
+              {campaign.status === 'draft' && (
+                <button className="btn btn--primary" onClick={() => setShowStepModal(true)}>
+                  + Add Step
+                </button>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative' }}>
+              {sequenceSteps.length === 0 ? (
+                <div style={{ padding: '3rem', textAlign: 'center', background: 'hsl(var(--secondary))', borderRadius: 8, border: '1px dashed hsl(var(--border))' }}>
+                  <p className="text-muted">No steps added yet. Add an email step to start the sequence.</p>
+                </div>
+              ) : (
+                sequenceSteps.map((step, index) => (
+                  <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ width: '100%', padding: '1rem', background: 'hsl(var(--secondary))', borderRadius: 8, border: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h4 style={{ fontWeight: 600 }}>Step {step.step_number}: Email Send</h4>
+                        <p className="text-muted" style={{ fontSize: '0.875rem' }}>Template: {step.email_templates?.name || 'Unknown Template'}</p>
+                        {step.subject && (
+                          <p className="text-muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                            Subject: <em>{step.subject}</em>
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <button 
                           type="button" 
                           className="btn btn--secondary" 
-                          style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', color: 'hsl(var(--destructive))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                          onClick={() => handleDeleteStep(step.id)}
+                          style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          onClick={() => openTestSendForStep(step)}
+                          title="Send a test email for this step to verify merge fields and copy"
                         >
-                          <FiTrash2 size={12} /> Remove
+                          <FiSend size={12} /> Send Test Email
                         </button>
-                      )}
+                        {campaign.status === 'draft' && (
+                          <button 
+                            type="button" 
+                            className="btn btn--secondary" 
+                            style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', color: 'hsl(var(--destructive))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                            onClick={() => handleDeleteStep(step.id)}
+                          >
+                            <FiTrash2 size={12} /> Remove
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    {index < sequenceSteps.length - 1 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
+                        <span style={{ fontSize: '0.75rem', background: 'hsl(var(--background))', color: 'hsl(var(--muted-foreground))', padding: '0.2rem 0.5rem', borderRadius: 999, border: '1px solid hsl(var(--border))' }}>
+                          Wait {sequenceSteps[index+1].wait_days ?? sequenceSteps[index+1].delay_days ?? 3} days
+                        </span>
+                        <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
+                      </div>
+                    )}
                   </div>
-                  {index < sequenceSteps.length - 1 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
-                      <span style={{ fontSize: '0.75rem', background: 'hsl(var(--background))', color: 'hsl(var(--muted-foreground))', padding: '0.2rem 0.5rem', borderRadius: 999, border: '1px solid hsl(var(--border))' }}>
-                        Wait {sequenceSteps[index+1].wait_days ?? sequenceSteps[index+1].delay_days ?? 3} days
-                      </span>
-                      <div style={{ height: 20, width: 2, background: 'hsl(var(--border))' }} />
-                    </div>
-                  )}
-                </div>
-              ))
+                ))
+              )}
+            </div>
+            
+            {campaign.status === 'draft' && sequenceSteps.length > 0 && (
+              <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  className="btn btn--primary"
+                  onClick={openEnrollModal}
+                >
+                  <FiPlay style={{ marginRight: '0.5rem' }} /> Activate Sequence
+                </button>
+              </div>
             )}
           </div>
-          
-          {campaign.status === 'draft' && sequenceSteps.length > 0 && (
-            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn--primary"
-                onClick={openEnrollModal}
-              >
-                <FiPlay style={{ marginRight: '0.5rem' }} /> Activate Sequence
-              </button>
-            </div>
-          )}
-        </div>
+        </>
       )}
 
-      {/* Live Sequence — Active Enrollments Reply Tagger */}
-      {campaign.type === 'sequence' && campaign.status === 'live' && enrollments.filter(e => e.status === 'active').length > 0 && (
+      {/* Tab 2: Active Prospects & Reply Tagger */}
+      {campaign.type === 'sequence' && activeTab === 'leads' && (
         <div className="page-card" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
@@ -1042,73 +1125,114 @@ export const CampaignDetailPage = () => {
               <FiSettings size={14} /> Customize Reply Tags
             </button>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Contact</th>
-                <th>Company</th>
-                <th>Step</th>
-                <th>Next Send</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {enrollments.filter(e => e.status === 'active').map(enr => (
-                <tr key={enr.id}>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{(enr.email_contacts as any)?.full_name ?? '—'}</div>
-                    <div className="text-muted" style={{ fontSize: '0.8rem' }}>{(enr.email_contacts as any)?.email}</div>
-                  </td>
-                  <td className="text-muted">{(enr.email_contacts as any)?.company ?? '—'}</td>
-                  <td style={{ fontWeight: 500 }}>Step {enr.current_step_number}</td>
-                  <td className="text-muted">{enr.next_run_at ? new Date(enr.next_run_at).toLocaleDateString() : '—'}</td>
-                  <td>
-                    <select
-                      className="form-input"
-                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', minWidth: 210, cursor: 'pointer' }}
-                      defaultValue=""
-                      disabled={taggingId === enr.id}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (!val) return;
-                        if (val === '__add_custom__') {
-                          setTargetEnrollmentForNewTag({ id: enr.id, contactId: enr.contact_id });
-                          setShowAddTagModal(true);
-                          e.target.value = '';
-                          return;
-                        }
-                        if (val === '__manage_tags__') {
-                          setShowTagManagerModal(true);
-                          e.target.value = '';
-                          return;
-                        }
 
-                        const tagObj = replyTags.find(t => t.id === val);
-                        if (!tagObj) return;
-
-                        if (confirm(`Tag this prospect as "${tagObj.label}" and exit the sequence?`)) {
-                          handleTagEnrollment(enr.id, val, enr.contact_id);
-                        } else {
-                          e.target.value = '';
-                        }
-                      }}
-                    >
-                      <option value="">— Tag reply —</option>
-                      {replyTags.map(tag => (
-                        <option key={tag.id} value={tag.id}>
-                          {tag.label}
-                        </option>
-                      ))}
-                      <option disabled>──────────</option>
-                      <option value="__add_custom__">➕ + Add custom tag...</option>
-                      <option value="__manage_tags__">⚙️ Customize tags...</option>
-                    </select>
-                  </td>
+          {enrollments.filter(e => e.status === 'active').length === 0 ? (
+            <div style={{ padding: '3rem 1.5rem', textAlign: 'center', background: 'hsl(var(--secondary) / 0.4)', borderRadius: 8 }}>
+              <FiTag size={28} style={{ color: 'hsl(var(--muted-foreground))', marginBottom: '0.5rem', opacity: 0.6 }} />
+              <h4 style={{ fontWeight: 600, margin: '0 0 0.35rem' }}>No active prospects currently in this sequence</h4>
+              <p className="text-muted" style={{ fontSize: '0.85rem', margin: '0 0 1rem' }}>
+                All enrolled contacts have either completed the sequence or exited upon reply.
+              </p>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={openEnrollModal}
+                style={{ fontSize: '0.8rem' }}
+              >
+                <FiPlay style={{ marginRight: '0.4rem' }} /> Enroll Contacts / Add Batch
+              </button>
+            </div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Contact</th>
+                  <th>Company</th>
+                  <th>Step</th>
+                  <th>Next Send</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {enrollments.filter(e => e.status === 'active').map(enr => (
+                  <tr key={enr.id}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{(enr.email_contacts as any)?.full_name ?? '—'}</div>
+                      <div className="text-muted" style={{ fontSize: '0.8rem' }}>{(enr.email_contacts as any)?.email}</div>
+                    </td>
+                    <td className="text-muted">{(enr.email_contacts as any)?.company ?? '—'}</td>
+                    <td style={{ fontWeight: 500 }}>Step {enr.current_step_number}</td>
+                    <td className="text-muted">{enr.next_run_at ? new Date(enr.next_run_at).toLocaleDateString() : '—'}</td>
+                    <td>
+                      <select
+                        className="form-input"
+                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', minWidth: 210, cursor: 'pointer' }}
+                        defaultValue=""
+                        disabled={taggingId === enr.id}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (!val) return;
+                          if (val === '__add_custom__') {
+                            setTargetEnrollmentForNewTag({ id: enr.id, contactId: enr.contact_id });
+                            setShowAddTagModal(true);
+                            e.target.value = '';
+                            return;
+                          }
+                          if (val === '__manage_tags__') {
+                            setShowTagManagerModal(true);
+                            e.target.value = '';
+                            return;
+                          }
+
+                          const tagObj = replyTags.find(t => t.id === val);
+                          if (!tagObj) return;
+
+                          if (confirm(`Tag this prospect as "${tagObj.label}" and exit the sequence?`)) {
+                            handleTagEnrollment(enr.id, val, enr.contact_id);
+                          } else {
+                            e.target.value = '';
+                          }
+                        }}
+                      >
+                        <option value="">— Tag reply —</option>
+                        {replyTags.map(tag => (
+                          <option key={tag.id} value={tag.id}>
+                            {tag.label}
+                          </option>
+                        ))}
+                        <option disabled>──────────</option>
+                        <option value="__add_custom__">➕ + Add custom tag...</option>
+                        <option value="__manage_tags__">⚙️ Customize tags...</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
+      )}
+
+      {/* Tab 3: Sends & Tracking History */}
+      {campaign.type === 'sequence' && activeTab === 'sends' && (
+        <CampaignSendHistory
+          campaignId={campaign.id}
+          campaignName={campaign.name}
+          campaignType="sequence"
+          enrolledContactIds={enrollments.map(e => e.contact_id).filter(Boolean)}
+          senders={senders}
+        />
+      )}
+
+      {/* Broadcast Sent History (if broadcast has been launched or completed) */}
+      {campaign.type === 'broadcast' && campaign.status !== 'draft' && (
+        <CampaignSendHistory
+          campaignId={campaign.id}
+          campaignName={campaign.name}
+          campaignType="broadcast"
+          enrolledContactIds={[]}
+          senders={senders}
+        />
       )}
 
 
