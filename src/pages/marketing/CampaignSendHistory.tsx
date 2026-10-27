@@ -39,7 +39,7 @@ const fmtShortDate = (iso: string | null) => {
 export const CampaignSendHistory: React.FC<CampaignSendHistoryProps> = ({
   campaignId,
   campaignName,
-  campaignType,
+  campaignType: _campaignType,
   enrolledContactIds,
   senders = [],
 }) => {
