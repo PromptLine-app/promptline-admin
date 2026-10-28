@@ -17,6 +17,7 @@ const TABS = [
   { to: 'automations', label: 'Automations' },
   { to: 'notes', label: 'Notes' },
   { to: 'logs', label: 'System Logs' },
+  { to: 'contract', label: 'Contract' },
 ];
 
 /**

@@ -273,3 +273,59 @@ export type CampaignEnrollment = {
   next_run_at: string | null;
   enrolled_at: string;
 };
+
+
+/* === Contract Generation Types === */
+
+export type ContractStatus = 'draft' | 'generated' | 'sent' | 'signed' | 'expired' | 'voided';
+export type BillingCadence = 'monthly' | 'annual_prepaid';
+export type SupportTier = 'standard' | 'priority' | 'dedicated';
+
+export type TenantContract = {
+  id: string;
+  tenant_id: string;
+  agreement_number: string;
+
+  // Customer party details
+  legal_business_name: string;
+  dba_name: string | null;
+  billing_address: string | null;
+  country: string;
+  state: string | null;
+  primary_contact_name: string | null;
+  primary_contact_email: string | null;
+  primary_contact_phone: string | null;
+  accounts_payable_email: string | null;
+  authorized_signer_name: string | null;
+  authorized_signer_title: string | null;
+  authorized_signer_email: string | null;
+
+  // Plan & Billing terms
+  plan_tier: string;
+  billing_cadence: BillingCadence;
+  commitment_months: number;
+  base_rate_cents: number;
+  discount_percent: number;
+  discount_label: string | null;
+  net_rate_cents: number;
+  included_calls: number;
+  overage_rate_cents: number;
+
+  // Integrations & Add-ons
+  integration_fees_cents: number;
+  integration_notes: string | null;
+  support_tier: SupportTier;
+
+  // Dates
+  agreement_date: string;
+  service_start_date: string;
+
+  // Internal
+  internal_notes: string | null;
+  status: ContractStatus;
+  pdf_storage_path: string | null;
+
+  generated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
