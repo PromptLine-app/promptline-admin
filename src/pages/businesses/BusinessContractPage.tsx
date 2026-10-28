@@ -322,7 +322,10 @@ export const BusinessContractPage = () => {
         .upsert(contractRow, { onConflict: 'agreement_number' })
         .select()
         .single();
-      if (saveErr) throw saveErr;
+      if (saveErr) {
+        console.error('Error saving contract to database:', saveErr);
+        throw new Error(`Database error: ${saveErr.message}`);
+      }
 
       const contract = saved as TenantContract;
 
@@ -334,14 +337,20 @@ export const BusinessContractPage = () => {
       const { error: uploadErr } = await supabase.storage
         .from('contracts')
         .upload(storagePath, pdfBlob, { upsert: true, contentType: 'application/pdf' });
-      if (uploadErr) throw uploadErr;
+      if (uploadErr) {
+        console.error('Error uploading contract PDF to storage:', uploadErr);
+        throw new Error(`Storage upload error: ${uploadErr.message}`);
+      }
 
       // Update contract record
       const { error: updateErr } = await supabase
         .from('tenant_contracts')
         .update({ status: 'generated' as ContractStatus, pdf_storage_path: storagePath })
         .eq('id', contract.id);
-      if (updateErr) throw updateErr;
+      if (updateErr) {
+        console.error('Error updating contract status:', updateErr);
+        throw new Error(`Status update error: ${updateErr.message}`);
+      }
 
       // Download to browser
       const downloadUrl = URL.createObjectURL(pdfBlob);
