@@ -476,7 +476,13 @@ export const BusinessContractPage = () => {
     borderBottom: '1px solid hsl(var(--border))', fontSize: '0.85rem',
   };
 
-  const projectedInvoice = draft.net_rate_cents + Math.round(draft.integration_fees_dollars * 100);
+  const discountCents = Math.round(draft.base_rate_cents * (draft.discount_percent / 100));
+  const projectedInvoice =
+    draft.billing_cadence === 'annual_prepaid'
+      ? draft.base_rate_cents * (draft.commitment_months > 1 ? draft.commitment_months : 12) -
+        discountCents +
+        Math.round(draft.integration_fees_dollars * 100)
+      : draft.net_rate_cents + Math.round(draft.integration_fees_dollars * 100);
 
   /* ---- Sidebar ---- */
   const renderSidebar = () => (

@@ -1,545 +1,509 @@
 import { jsPDF } from 'jspdf';
 import type { TenantContract } from '@/types/domain';
+import { PROMPTLINE_LOGO_BASE64 } from './logoBase64';
 
-// ── Colours ───────────────────────────────────────────────────────────
-const NAVY: [number, number, number] = [15, 30, 80];
-const GOLD: [number, number, number] = [180, 140, 50];
-const CREAM: [number, number, number] = [245, 240, 230];
-const BODY: [number, number, number] = [50, 50, 50];
-const WHITE: [number, number, number] = [255, 255, 255];
-const LIGHT_GRAY: [number, number, number] = [245, 245, 245];
-const BORDER_GRAY: [number, number, number] = [200, 200, 200];
-
-// ── Layout constants ─────────────────────────────────────────────────
-const PAGE_W = 210; // A4 mm
-const PAGE_H = 297;
-const MARGIN_L = 20;
-const MARGIN_R = 20;
-const MARGIN_TOP = 35; // usable area starts here (below header)
-const MARGIN_BOT = 25; // footer zone
-const CONTENT_W = PAGE_W - MARGIN_L - MARGIN_R;
-
-const TEMPLATE_VERSION = 'v2026.1';
+// ── Palette (matching exact design) ──────────────────────────────────
+const NAVY: [number, number, number] = [23, 37, 84];        // #172554 Title & headings
+const DARK_NAVY: [number, number, number] = [15, 30, 80];    // #0F1E50 Table header, accent bars
+const GOLD: [number, number, number] = [180, 140, 50];       // #B48C32 Tags, section underlines
+const SLATE_DARK: [number, number, number] = [15, 23, 42];   // #0F172A Main text & values
+const SLATE_BODY: [number, number, number] = [51, 65, 85];   // #334155 Body copy & clauses
+const SLATE_MUTED: [number, number, number] = [100, 116, 139]; // #64748B Secondary labels & dates
+const SLATE_LIGHT: [number, number, number] = [148, 163, 184]; // #94A3B8 Footer
+const BORDER_COLOR: [number, number, number] = [226, 217, 204]; // #E2D9CC Card & row borders
 
 // ── Helpers ──────────────────────────────────────────────────────────
 const formatUsd = (cents: number): string =>
   `$${(cents / 100).toLocaleString('en-US', {
-    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 
-const formatDate = (iso: string): string => {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-};
-
 const capitalize = (s: string): string =>
-  s
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-// ── PDF Generator ────────────────────────────────────────────────────
 export function generateContractPdf(contract: TenantContract): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  let y = MARGIN_TOP;
+  const PAGE_W = 210;
+  const MARGIN_L = 18;
+  const MARGIN_R = 192;
+  const CONTENT_W = MARGIN_R - MARGIN_L; // 174mm
 
-  // ── Y-position helpers ───────────────────────────────────────────
-  const remaining = () => PAGE_H - MARGIN_BOT - y;
-
-  const ensureSpace = (need: number) => {
-    if (remaining() < need) {
-      doc.addPage();
-      y = MARGIN_TOP;
+  // ── Header drawer ─────────────────────────────────────────────────
+  const drawHeader = () => {
+    // PromptLine Logo Icon
+    try {
+      doc.addImage(PROMPTLINE_LOGO_BASE64, 'PNG', 18, 10.5, 6.8, 7.7);
+    } catch {
+      // fallback if logo fails
     }
+
+    // Wordmark 'PromptLine'
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(...SLATE_DARK);
+    doc.text('PromptLine', 26.5, 16.8);
+
+    // Right provider info & agreement #
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...SLATE_MUTED);
+    doc.text(
+      'Theoremlabs Partners LLC | 101 S. Tryon St, STE 2700, Charlotte, NC 28280',
+      MARGIN_R,
+      14,
+      { align: 'right' }
+    );
+    doc.text(`Agreement ${contract.agreement_number}`, MARGIN_R, 18, {
+      align: 'right',
+    });
+
+    // Top dividing bar
+    doc.setDrawColor(...DARK_NAVY);
+    doc.setLineWidth(0.6);
+    doc.line(MARGIN_L, 22.5, MARGIN_R, 22.5);
   };
 
-  const setFont = (
-    style: 'normal' | 'bold' | 'italic' | 'bolditalic' = 'normal',
-    size = 10,
-    color: [number, number, number] = BODY,
-  ) => {
-    doc.setFont('helvetica', style);
-    doc.setFontSize(size);
-    doc.setTextColor(...color);
+  // ── Footer drawer ─────────────────────────────────────────────────
+  const drawFooter = (pageNum: number, totalPages: number) => {
+    const y = 286;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...SLATE_LIGHT);
+    const statusText =
+      contract.status === 'signed'
+        ? 'SIGNED'
+        : 'UNSIGNED - Signature not verified';
+    doc.text(
+      `${contract.agreement_number} | Template v1.0 | ${statusText}`,
+      MARGIN_L,
+      y
+    );
+    doc.text(`Page ${pageNum} of ${totalPages}`, MARGIN_R, y, {
+      align: 'right',
+    });
   };
 
-  const drawLine = (yPos: number) => {
-    doc.setDrawColor(...BORDER_GRAY);
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN_L, yPos, PAGE_W - MARGIN_R, yPos);
-  };
-
-  // Adds wrapped text, auto-paginating as needed. Returns final y.
-  const addWrappedText = (
-    text: string,
-    x: number,
-    startY: number,
-    maxW: number,
-    lineH: number,
-  ): number => {
-    const lines: string[] = doc.splitTextToSize(text, maxW);
-    let cy = startY;
-    for (const line of lines) {
-      if (cy + lineH > PAGE_H - MARGIN_BOT) {
-        doc.addPage();
-        cy = MARGIN_TOP;
-      }
-      doc.text(line, x, cy);
-      cy += lineH;
-    }
-    return cy;
-  };
-
-  // ================================================================
-  // PAGE 1 — Cover + Parties + Order Summary
-  // ================================================================
+  // ==================================================================
+  // PAGE 1
+  // ==================================================================
+  drawHeader();
 
   // Title
-  setFont('bold', 22, NAVY);
-  doc.text('SaaS Recurring Services Agreement', PAGE_W / 2, y, {
-    align: 'center',
-  });
-  y += 10;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(21);
+  doc.setTextColor(...NAVY);
+  doc.text('SaaS Recurring Services Agreement', MARGIN_L, 31.5);
 
-  // Date line
-  setFont('normal', 10, BODY);
-  const dateLine = `Agreement Date: ${formatDate(contract.agreement_date)}  |  Service Start Date: ${formatDate(contract.service_start_date)}`;
-  doc.text(dateLine, PAGE_W / 2, y, { align: 'center' });
-  y += 10;
+  // Subtitle / Dates
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...SLATE_MUTED);
+  doc.text(
+    `Agreement date ${contract.agreement_date}  |  Service start ${contract.service_start_date}`,
+    MARGIN_L,
+    37
+  );
 
-  drawLine(y);
-  y += 6;
+  // Section: Parties
+  doc.setFont('times', 'bold');
+  doc.setFontSize(12.5);
+  doc.setTextColor(...NAVY);
+  doc.text('Parties', MARGIN_L, 44);
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L, 45.8, 31, 45.8);
 
-  // ── Parties ────────────────────────────────────────────────────
-  setFont('bold', 13, NAVY);
-  doc.text('Parties', MARGIN_L, y);
-  y += 7;
+  // Boxes
+  const boxY = 48.5;
+  const boxH = 26;
+  const boxW = 84;
 
-  const colW = (CONTENT_W - 10) / 2; // 10mm gutter
-  const leftX = MARGIN_L;
-  const rightX = MARGIN_L + colW + 10;
-
-  // Provider column
-  const providerStartY = y;
-  setFont('bold', 10, NAVY);
-  doc.text('PROVIDER', leftX, y);
-  y += 5;
-  setFont('bold', 10, BODY);
-  doc.text('Theoremlabs Partners LLC', leftX, y);
-  y += 4.5;
-  setFont('normal', 9, BODY);
-  doc.text('d/b/a PromptLine', leftX, y);
-  y += 5;
-  doc.text('101 S. Tryon St, STE 2700', leftX, y);
-  y += 4;
-  doc.text('Charlotte, NC 28280', leftX, y);
-  y += 5;
-  doc.text('contracts@promptline.ai', leftX, y);
-  y += 4;
-  const providerEndY = y;
-
-  // Customer column
-  let cy = providerStartY;
-  setFont('bold', 10, NAVY);
-  doc.text('CUSTOMER', rightX, cy);
-  cy += 5;
-  setFont('bold', 10, BODY);
-  doc.text(contract.legal_business_name, rightX, cy);
-  cy += 4.5;
-  if (contract.dba_name) {
-    setFont('normal', 9, BODY);
-    doc.text(`d/b/a ${contract.dba_name}`, rightX, cy);
-    cy += 4.5;
-  }
-  setFont('normal', 9, BODY);
-  if (contract.billing_address) {
-    const addrLines = doc.splitTextToSize(contract.billing_address, colW);
-    for (const l of addrLines) {
-      doc.text(l, rightX, cy);
-      cy += 4;
-    }
-  }
-  if (contract.state) {
-    doc.text(`${contract.state}, ${contract.country}`, rightX, cy);
-    cy += 4;
-  } else {
-    doc.text(contract.country, rightX, cy);
-    cy += 4;
-  }
-  cy += 1;
-  if (contract.primary_contact_name) {
-    doc.text(`Contact: ${contract.primary_contact_name}`, rightX, cy);
-    cy += 4;
-  }
-  if (contract.primary_contact_email) {
-    doc.text(contract.primary_contact_email, rightX, cy);
-    cy += 4;
-  }
-  if (contract.primary_contact_phone) {
-    doc.text(contract.primary_contact_phone, rightX, cy);
-    cy += 4;
-  }
-  if (contract.accounts_payable_email) {
-    doc.text(`AP: ${contract.accounts_payable_email}`, rightX, cy);
-    cy += 4;
-  }
-  cy += 1;
-  if (contract.authorized_signer_name) {
-    setFont('bold', 9, BODY);
-    doc.text('Authorized Signer', rightX, cy);
-    cy += 4;
-    setFont('normal', 9, BODY);
-    doc.text(contract.authorized_signer_name, rightX, cy);
-    cy += 4;
-    if (contract.authorized_signer_title) {
-      doc.text(contract.authorized_signer_title, rightX, cy);
-      cy += 4;
-    }
-    if (contract.authorized_signer_email) {
-      doc.text(contract.authorized_signer_email, rightX, cy);
-      cy += 4;
-    }
-  }
-
-  y = Math.max(providerEndY, cy) + 6;
-  drawLine(y);
-  y += 8;
-
-  // ── Order Summary Table ────────────────────────────────────────
-  setFont('bold', 13, NAVY);
-  doc.text('Order Summary', MARGIN_L, y);
-  y += 7;
-
-  const billingLabel =
-    contract.billing_cadence === 'annual_prepaid'
-      ? 'Annual (Prepaid)'
-      : 'Monthly';
-
-  const commitmentLabel =
-    contract.commitment_months <= 1
-      ? 'Month-to-Month'
-      : `${contract.commitment_months} months`;
-
-  const discountLabel = contract.discount_percent
-    ? `${contract.discount_percent}%${contract.discount_label ? ` (${contract.discount_label})` : ''}`
-    : 'None';
-
-  const integrationLabel = contract.integration_fees_cents
-    ? `${formatUsd(contract.integration_fees_cents)} (one-time)${contract.integration_notes ? ` — ${contract.integration_notes}` : ''}`
-    : '$0';
-
-  // Projected first invoice: net_rate + integration fees
-  const projectedFirstInvoice =
-    contract.net_rate_cents + contract.integration_fees_cents;
-
-  const rows: [string, string][] = [
-    ['Plan Tier', capitalize(contract.plan_tier)],
-    ['Billing Cadence', billingLabel],
-    ['Commitment Term', commitmentLabel],
-    ['Base Monthly Rate', formatUsd(contract.base_rate_cents)],
-    ['Discount', discountLabel],
-    ['Net Monthly Subscription', formatUsd(contract.net_rate_cents)],
-    [
-      'Included Calls / Month',
-      contract.included_calls.toLocaleString('en-US'),
-    ],
-    ['Overage Rate', `${formatUsd(contract.overage_rate_cents)} / call`],
-    ['Integration / Setup Fees', integrationLabel],
-    ['Support Level', capitalize(contract.support_tier)],
-    ['Projected First Invoice', formatUsd(projectedFirstInvoice)],
-  ];
-
-  const colItemW = CONTENT_W * 0.4;
-  const colDetailW = CONTENT_W * 0.6;
-  const rowH = 7;
-
-  // Header row
-  doc.setFillColor(...GOLD);
-  doc.rect(MARGIN_L, y, CONTENT_W, rowH, 'F');
-  setFont('bold', 9, WHITE);
-  doc.text('Item', MARGIN_L + 3, y + 5);
-  doc.text('Details', MARGIN_L + colItemW + 3, y + 5);
-  y += rowH;
-
-  // Data rows
-  for (let i = 0; i < rows.length; i++) {
-    ensureSpace(rowH);
-    if (i % 2 === 0) {
-      doc.setFillColor(...LIGHT_GRAY);
-      doc.rect(MARGIN_L, y, CONTENT_W, rowH, 'F');
-    }
-    setFont('bold', 9, BODY);
-    doc.text(rows[i][0], MARGIN_L + 3, y + 5);
-    setFont('normal', 9, BODY);
-    doc.text(rows[i][1], MARGIN_L + colItemW + 3, y + 5);
-    y += rowH;
-  }
-
-  // Border around table
-  doc.setDrawColor(...BORDER_GRAY);
+  // Provider Box (Left)
+  doc.setFillColor(250, 248, 245);
+  doc.setDrawColor(...BORDER_COLOR);
   doc.setLineWidth(0.3);
-  doc.rect(
-    MARGIN_L,
-    y - rowH * (rows.length + 1),
-    CONTENT_W,
-    rowH * (rows.length + 1),
+  doc.roundedRect(MARGIN_L, boxY, boxW, boxH, 1.5, 1.5, 'FD');
+  doc.setFillColor(...DARK_NAVY);
+  doc.rect(MARGIN_L, boxY, 2.5, boxH, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(...GOLD);
+  doc.text('PROVIDER', 23.5, boxY + 5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...SLATE_DARK);
+  doc.text('Theoremlabs Partners LLC', 23.5, boxY + 10.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...SLATE_BODY);
+  doc.text('101 S. Tryon St, STE 2700', 23.5, boxY + 15.5);
+  doc.text('Charlotte, NC 28280', 23.5, boxY + 20);
+
+  // Customer Box (Right)
+  const rBoxX = 108;
+  doc.setFillColor(250, 248, 245);
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(rBoxX, boxY, boxW, boxH, 1.5, 1.5, 'FD');
+  doc.setFillColor(...DARK_NAVY);
+  doc.rect(rBoxX, boxY, 2.5, boxH, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(...GOLD);
+  doc.text('CUSTOMER', rBoxX + 5.5, boxY + 5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...SLATE_DARK);
+  const custNameLines = doc.splitTextToSize(
+    contract.legal_business_name,
+    boxW - 8
   );
+  doc.text(custNameLines[0], rBoxX + 5.5, boxY + 10.5);
 
-  if (contract.integration_notes && !contract.integration_fees_cents) {
-    y += 3;
-    setFont('italic', 8, BODY);
-    doc.text(`Note: ${contract.integration_notes}`, MARGIN_L, y);
-    y += 5;
-  }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...SLATE_BODY);
+  const addrParts = [
+    contract.billing_address,
+    contract.state,
+    contract.country,
+  ].filter(Boolean);
+  doc.text(addrParts.join(', '), rBoxX + 5.5, boxY + 15.5);
 
-  // ================================================================
-  // PAGES 2+ — Terms & Conditions
-  // ================================================================
-  doc.addPage();
-  y = MARGIN_TOP;
+  const contactParts = [
+    contract.primary_contact_name,
+    contract.primary_contact_email,
+    contract.primary_contact_phone,
+  ].filter(Boolean);
+  doc.text(contactParts.join('  |  '), rBoxX + 5.5, boxY + 20);
 
-  setFont('bold', 16, NAVY);
-  doc.text('Terms & Conditions', MARGIN_L, y);
-  y += 10;
+  // Section: Order Summary
+  const osY = 80.5;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(12.5);
+  doc.setTextColor(...NAVY);
+  doc.text('Order Summary', MARGIN_L, osY);
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L, osY + 1.8, 45, osY + 1.8);
 
-  const sections: { title: string; body: string }[] = [
+  // Table Header
+  const tY = osY + 4.5;
+  doc.setFillColor(...DARK_NAVY);
+  doc.rect(MARGIN_L, tY, CONTENT_W, 6.2, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text('ITEM', 21, tY + 4.2);
+  doc.text('AMOUNT / TERMS', 189, tY + 4.2, { align: 'right' });
+
+  // Rows definition
+  const commitmentStr =
+    contract.commitment_months > 1
+      ? `${contract.commitment_months}-month commitment`
+      : 'Month-to-month';
+
+  const rows: {
+    item: string;
+    terms: string;
+    highlight?: 'recur' | 'total';
+  }[] = [
+    { item: 'Plan', terms: capitalize(contract.plan_tier) },
     {
-      title: 'Section 1 — Parties & Definitions',
-      body: '"Provider" means Theoremlabs Partners LLC d/b/a PromptLine. "Customer" means the entity identified above. "Services" means the PromptLine AI-powered call-answering and lead-management platform, including the phone number, voice agent, dashboard, and related integrations provided under the selected Plan.',
+      item: 'Billing cadence',
+      terms:
+        contract.billing_cadence === 'annual_prepaid'
+          ? 'Annual prepaid'
+          : 'Monthly',
     },
+    { item: 'Commitment', terms: commitmentStr },
     {
-      title: 'Section 2 — Services & Usage',
-      body: 'Provider grants Customer a non-exclusive, non-transferable right to use the Services during the Term. Usage is limited to the number of Included Calls per billing period as specified in the Order Summary. "Call" means any inbound or outbound telephone interaction handled by the PromptLine AI agent, regardless of duration.',
-    },
-    {
-      title: 'Section 3 — Term, Renewal & Cancellation',
-      body: 'The initial term begins on the Service Start Date and continues for the Commitment Term specified above. Thereafter, the agreement auto-renews on a month-to-month basis unless either party gives at least thirty (30) days\u2019 written notice before the end of the then-current term. Customer may cancel at any time; cancellation takes effect at the end of the current paid period. No pro-rated refunds are issued for partial periods.',
-    },
-    {
-      title: 'Section 4 — Fees, Billing & Overages',
-      body: 'Customer shall pay the Net Monthly Subscription fee in advance on each billing date. Overage calls beyond the Included Calls allowance are billed at the Overage Rate shown above, invoiced in arrears at the next billing cycle. All fees are in U.S. Dollars. Late payments accrue interest at 1.5% per month or the maximum rate permitted by law, whichever is less.',
-    },
-    {
-      title: 'Section 5 — Implementation & Integrations',
-      body: 'Provider will configure the Services within five (5) business days of the Service Start Date, including phone number provisioning, AI agent setup, and any custom integrations specified in the Order Summary. One-time Integration / Setup Fees, if any, are due upon execution of this Agreement.',
-    },
-    {
-      title: 'Section 6 — Support',
-      body: 'Provider offers support at the tier indicated in the Order Summary. Standard support includes email support during business hours (Mon\u2013Fri 9 AM \u2013 6 PM ET). Priority support adds phone support and a 4-hour response SLA. Dedicated support includes a named account manager and 1-hour response SLA.',
-    },
-    {
-      title: 'Section 7 — Customer Responsibilities',
-      body: 'Customer shall: (a) provide accurate business information for AI agent configuration; (b) maintain a valid payment method on file; (c) comply with all applicable laws, including telemarketing and do-not-call regulations; (d) not use the Services for any unlawful, fraudulent, or abusive purpose.',
-    },
-    {
-      title: 'Section 8 — Call Recording & AI Disclosure',
-      body: 'The Services may record calls and use artificial intelligence to transcribe, summarize, and respond to callers. Customer is solely responsible for compliance with all applicable recording consent laws (including two-party consent states) and for providing appropriate disclosures to callers that they may be interacting with an AI system.',
-    },
-    {
-      title: 'Section 9 — Data Privacy & Security',
-      body: 'Provider processes Customer Data solely to deliver the Services and in accordance with its Privacy Policy. Provider maintains commercially reasonable administrative, technical, and physical safeguards. Customer retains all ownership rights in Customer Data. Upon termination, Provider will delete Customer Data within ninety (90) days, except as required by law.',
-    },
-    {
-      title: 'Section 10 — Intellectual Property & Confidentiality',
-      body: 'Each party retains its pre-existing IP. Provider owns all rights in the Services, platform, AI models, and aggregated/anonymized data. Neither party shall disclose the other\u2019s Confidential Information without prior written consent, except as required by law.',
-    },
-    {
-      title: 'Section 11 — Limitation of Liability',
-      body: 'TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEITHER PARTY SHALL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES. PROVIDER\u2019S TOTAL AGGREGATE LIABILITY UNDER THIS AGREEMENT SHALL NOT EXCEED THE FEES PAID BY CUSTOMER IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.',
-    },
-    {
-      title: 'Section 12 — Termination for Cause',
-      body: 'Either party may terminate this Agreement immediately upon written notice if the other party: (a) materially breaches and fails to cure within fifteen (15) days of notice; or (b) becomes insolvent, files for bankruptcy, or ceases operations.',
-    },
-    {
-      title: 'Section 13 — General Provisions',
-      body: 'This Agreement constitutes the entire agreement between the parties. It is governed by the laws of the State of North Carolina. Any disputes shall be resolved by binding arbitration in Charlotte, NC under AAA Commercial Rules. Neither party may assign this Agreement without the other\u2019s written consent. Notices shall be sent to the addresses or emails specified above. If any provision is held unenforceable, the remaining provisions continue in full force.',
+      item: 'Base subscription rate',
+      terms: `${formatUsd(contract.base_rate_cents)} / month`,
     },
   ];
 
-  const LINE_H = 4.5;
-
-  for (const section of sections) {
-    // Section heading
-    ensureSpace(20);
-    setFont('bold', 11, NAVY);
-    doc.text(section.title, MARGIN_L, y);
-    y += 6;
-
-    // Section body
-    setFont('normal', 10, BODY);
-    y = addWrappedText(section.body, MARGIN_L, y, CONTENT_W, LINE_H);
-    y += 6;
+  const discountCents = Math.round(
+    contract.base_rate_cents * (contract.discount_percent / 100)
+  );
+  if (discountCents > 0) {
+    const dLabel = contract.discount_label
+      ? `Discount (${contract.discount_label})`
+      : `Discount (${contract.discount_percent}%)`;
+    rows.push({
+      item: dLabel,
+      terms: `-${formatUsd(discountCents)} / month`,
+    });
   }
 
-  // ================================================================
-  // SIGNATURE PAGE
-  // ================================================================
-  ensureSpace(90); // need room for signature blocks
-  // If we don't have enough room, a new page was added by ensureSpace
+  rows.push({
+    item: 'Net subscription rate',
+    terms: `${formatUsd(contract.net_rate_cents)} / month`,
+  });
 
-  y += 4;
-  drawLine(y);
-  y += 8;
+  rows.push({
+    item: 'Recurring monthly rate',
+    terms: `${formatUsd(contract.net_rate_cents)} / month`,
+    highlight: 'recur',
+  });
 
-  setFont('bold', 14, NAVY);
-  doc.text('Signatures', MARGIN_L, y);
-  y += 4;
-  setFont('normal', 9, BODY);
+  rows.push({
+    item: 'Included billable calls',
+    terms: `${contract.included_calls.toLocaleString('en-US')} per billing month`,
+  });
+
+  rows.push({
+    item: 'Overage rate',
+    terms: `${formatUsd(contract.overage_rate_cents)} per additional billable call`,
+  });
+
+  // Projected first invoice calculation
+  let projectedInvoiceCents: number;
+  if (contract.billing_cadence === 'annual_prepaid') {
+    const annualBase =
+      contract.base_rate_cents *
+      (contract.commitment_months > 1 ? contract.commitment_months : 12);
+    projectedInvoiceCents =
+      annualBase - discountCents + (contract.integration_fees_cents || 0);
+  } else {
+    projectedInvoiceCents =
+      contract.net_rate_cents + (contract.integration_fees_cents || 0);
+  }
+
+  rows.push({
+    item: 'Projected first invoice (excl. usage & taxes)',
+    terms: formatUsd(projectedInvoiceCents),
+    highlight: 'total',
+  });
+
+  // Render Table Rows
+  let curY = tY + 6.2;
+  const rowH = 5.2;
+
+  for (const r of rows) {
+    if (r.highlight === 'recur') {
+      doc.setFillColor(250, 248, 242);
+      doc.rect(MARGIN_L, curY, CONTENT_W, rowH, 'F');
+    } else if (r.highlight === 'total') {
+      doc.setFillColor(246, 238, 219);
+      doc.rect(MARGIN_L, curY, CONTENT_W, rowH + 0.8, 'F');
+    }
+
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.setLineWidth(0.2);
+    const bottomY = curY + (r.highlight === 'total' ? rowH + 0.8 : rowH);
+    doc.line(MARGIN_L, bottomY, MARGIN_R, bottomY);
+
+    if (r.highlight === 'total') {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...SLATE_DARK);
+      doc.text(r.item, 21, curY + 4);
+      doc.setFontSize(8.5);
+      doc.text(r.terms, 189, curY + 4, { align: 'right' });
+      curY += rowH + 0.8;
+    } else if (r.highlight === 'recur') {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.8);
+      doc.setTextColor(...SLATE_DARK);
+      doc.text(r.item, 21, curY + 3.7);
+      doc.text(r.terms, 189, curY + 3.7, { align: 'right' });
+      curY += rowH;
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.8);
+      doc.setTextColor(...SLATE_BODY);
+      doc.text(r.item, 21, curY + 3.7);
+      doc.setTextColor(...SLATE_DARK);
+      doc.text(r.terms, 189, curY + 3.7, { align: 'right' });
+      curY += rowH;
+    }
+  }
+
+  // Note below table
+  curY += 2.8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.8);
+  doc.setTextColor(...SLATE_MUTED);
   doc.text(
-    'IN WITNESS WHEREOF, the parties have executed this Agreement as of the Agreement Date.',
+    'Usage-based charges are variable and are not included in any fixed total. Example: 550 billable calls on a 500 allowance = 50 x $1.00 = $50.00 overage.',
     MARGIN_L,
-    y,
+    curY
   );
-  y += 10;
 
-  const sigColW = (CONTENT_W - 14) / 2;
-  const sigRightX = MARGIN_L + sigColW + 14;
-  const sigLineLen = sigColW - 4;
+  // Section: Terms and Conditions
+  curY += 6.5;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(12.5);
+  doc.setTextColor(...NAVY);
+  doc.text('Terms and Conditions', MARGIN_L, curY);
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L, curY + 1.8, 56, curY + 1.8);
+  curY += 6;
 
-  // ── Customer signature block ───────────────────────────────────
-  let sy = y;
-  setFont('bold', 10, NAVY);
-  doc.text('CUSTOMER', MARGIN_L, sy);
-  sy += 7;
+  const p1Terms = [
+    {
+      title: '1. Parties and Definitions',
+      body: `This Recurring Services Agreement is entered into between Theoremlabs Partners LLC ("Provider") and ${contract.legal_business_name} ("Customer"). Capitalized terms have the meanings given in this Agreement and its Schedules, which control in the order: Special Terms, Order Summary, these Terms.`,
+    },
+    {
+      title: '2. Services and Usage',
+      body: `Provider will make the PromptLine ${capitalize(contract.plan_tier)} plan available to Customer, including ${contract.included_calls.toLocaleString('en-US')} billable calls per billing month. Unused calls do not roll over. Billable calls are defined in the Call Usage Schedule as approved by Provider.`,
+    },
+    {
+      title: '3. Term, Renewal and Cancellation',
+      body: `The subscription begins on ${contract.service_start_date} on a ${contract.commitment_months > 1 ? `${contract.commitment_months}-month` : 'month-to-month'} committed basis and renews automatically for like periods unless either party gives written notice at least 30 days before renewal.`,
+    },
+  ];
 
-  setFont('normal', 9, BODY);
-  doc.text('Authorized Signer:', MARGIN_L, sy);
-  setFont('bold', 9, BODY);
+  for (const t of p1Terms) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...DARK_NAVY);
+    doc.text(t.title, MARGIN_L, curY);
+    curY += 3.8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...SLATE_BODY);
+    const lines = doc.splitTextToSize(t.body, CONTENT_W);
+    for (const l of lines) {
+      doc.text(l, MARGIN_L, curY);
+      curY += 3.5;
+    }
+    curY += 2;
+  }
+
+  // ==================================================================
+  // PAGE 2
+  // ==================================================================
+  doc.addPage();
+  drawHeader();
+
+  let p2Y = 30;
+
+  const p2Terms = [
+    {
+      title: '4. Fees and Overages',
+      body: `Customer authorizes recurring charges per the Order Summary. Billable calls exceeding the monthly allowance are charged at ${formatUsd(contract.overage_rate_cents)} per call. Taxes are calculated by Provider's billing provider at invoicing. Disputes must be raised in writing within 30 days of invoice.`,
+    },
+    {
+      title: '5. Implementation and Integrations',
+      body:
+        contract.integration_fees_cents > 0
+          ? `Custom integration and setup is included as specified in the Order Summary (${formatUsd(contract.integration_fees_cents)}${contract.integration_notes ? `: ${contract.integration_notes}` : ''}).`
+          : 'No custom integration is included in this Agreement.',
+    },
+    {
+      title: '6. Support',
+      body: `Support is provided via email at the ${capitalize(contract.support_tier)} tier, Mon–Fri 9am–5pm ET. Service levels are as defined in the attached SLA exhibit.`,
+    },
+    {
+      title: '7. Customer Responsibilities',
+      body: 'Customer will use the Services lawfully, honor opt-out requests, and is responsible for obtaining all consents required under TCPA, telemarketing and state recording and SMS laws.',
+    },
+    {
+      title: '8. Recording, AI Disclosure and Limitations',
+      body: 'Calls may be recorded and transcribed. AI agents may produce errors, inaccurate bookings or outages. The Services are not intended for emergency or high-risk use. Except as expressly stated, the Services are provided without warranties.',
+    },
+    {
+      title: '9. Data Privacy',
+      body: 'Each party will comply with applicable data protection law. Data processing, security, retention and subprocessors are governed by the Data Processing Addendum where attached.',
+    },
+    {
+      title: '10. IP and Confidentiality',
+      body: "Provider retains all rights in the Services. Customer retains rights in Customer data. Each party will protect the other's confidential information.",
+    },
+    {
+      title: '11. Limitation of Liability',
+      body: "Neither party is liable for indirect or consequential damages. Each party's aggregate liability is capped as set out in counsel-approved terms, except where non-waivable law provides otherwise.",
+    },
+    {
+      title: '12. Termination',
+      body: 'Either party may terminate for material breach not cured within 30 days of written notice. Provisions that by nature survive termination will survive.',
+    },
+    {
+      title: '13. General',
+      body: 'This Agreement is governed by the laws of the State of North Carolina. Electronic signatures are binding. Amendments must be in writing and signed by both parties.',
+    },
+  ];
+
+  for (const t of p2Terms) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...DARK_NAVY);
+    doc.text(t.title, MARGIN_L, p2Y);
+    p2Y += 3.8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...SLATE_BODY);
+    const lines = doc.splitTextToSize(t.body, CONTENT_W);
+    for (const l of lines) {
+      doc.text(l, MARGIN_L, p2Y);
+      p2Y += 3.4;
+    }
+    p2Y += 1.8;
+  }
+
+  // Section: Signatures
+  p2Y += 3;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(12.5);
+  doc.setTextColor(...NAVY);
+  doc.text('Signatures', MARGIN_L, p2Y);
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L, p2Y + 1.8, 37, p2Y + 1.8);
+  p2Y += 6;
+
+  // Subheadings
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...GOLD);
+  doc.text('CUSTOMER', MARGIN_L, p2Y);
+  doc.text('PROVIDER', rBoxX, p2Y);
+
+  const sigLineY = p2Y + 17;
+  doc.setDrawColor(...SLATE_MUTED);
+  doc.setLineWidth(0.4);
+  doc.line(MARGIN_L, sigLineY, 90, sigLineY);
+  doc.line(rBoxX, sigLineY, 180, sigLineY);
+
+  // Customer fields
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...SLATE_DARK);
   doc.text(
-    contract.authorized_signer_name || '________________________',
-    MARGIN_L + 35,
-    sy,
+    `Name: ${contract.authorized_signer_name || contract.primary_contact_name || ''}`,
+    MARGIN_L,
+    sigLineY + 5.5
   );
-  sy += 6;
-
-  setFont('normal', 9, BODY);
-  doc.text('Title:', MARGIN_L, sy);
-  setFont('bold', 9, BODY);
   doc.text(
-    contract.authorized_signer_title || '________________________',
-    MARGIN_L + 35,
-    sy,
+    `Title: ${contract.authorized_signer_title || ''}`,
+    MARGIN_L,
+    sigLineY + 10.5
   );
-  sy += 6;
+  doc.text('Date: __________________', MARGIN_L, sigLineY + 15.5);
 
-  setFont('normal', 9, BODY);
-  doc.text('Email:', MARGIN_L, sy);
-  setFont('bold', 9, BODY);
-  doc.text(
-    contract.authorized_signer_email || '________________________',
-    MARGIN_L + 35,
-    sy,
-  );
-  sy += 6;
+  // Provider fields
+  doc.text('Name: ', rBoxX, sigLineY + 5.5);
+  doc.text('Title: Authorized Signatory', rBoxX, sigLineY + 10.5);
+  doc.text('Date: __________________', rBoxX, sigLineY + 15.5);
 
-  setFont('normal', 9, BODY);
-  doc.text('Date:', MARGIN_L, sy);
-  doc.text('_________________________', MARGIN_L + 35, sy);
-  sy += 10;
-
-  doc.text('Signature:', MARGIN_L, sy);
-  drawLine(sy + 1);
-  doc.line(MARGIN_L + 20, sy + 1, MARGIN_L + sigLineLen, sy + 1);
-
-  // ── Provider signature block ───────────────────────────────────
-  let py = y;
-  setFont('bold', 10, NAVY);
-  doc.text('PROVIDER', sigRightX, py);
-  py += 7;
-
-  setFont('normal', 9, BODY);
-  doc.text('Name:', sigRightX, py);
-  setFont('bold', 9, BODY);
-  doc.text('Mayur Patel', sigRightX + 35, py);
-  py += 6;
-
-  setFont('normal', 9, BODY);
-  doc.text('Title:', sigRightX, py);
-  setFont('bold', 9, BODY);
-  doc.text('Managing Partner', sigRightX + 35, py);
-  py += 6;
-
-  setFont('normal', 9, BODY);
-  doc.text('Email:', sigRightX, py);
-  setFont('bold', 9, BODY);
-  doc.text('mayur@promptline.ai', sigRightX + 35, py);
-  py += 6;
-
-  setFont('normal', 9, BODY);
-  doc.text('Date:', sigRightX, py);
-  doc.text('_________________________', sigRightX + 35, py);
-  py += 10;
-
-  doc.text('Signature:', sigRightX, py);
-  doc.line(sigRightX + 20, py + 1, sigRightX + sigLineLen, py + 1);
-
-  // ================================================================
-  // HEADERS & FOOTERS — final pass over all pages
-  // ================================================================
+  // ── Render Footers on all pages ───────────────────────────────────
   const totalPages = doc.getNumberOfPages();
-
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-
-    // ── Header bar ───────────────────────────────────────────────
-    doc.setFillColor(...CREAM);
-    doc.rect(0, 0, PAGE_W, 25, 'F');
-
-    // Left side
-    setFont('bold', 14, NAVY);
-    doc.text('PROMPTLINE', MARGIN_L, 11);
-    setFont('normal', 7, BODY);
-    doc.text('by Theoremlabs Partners LLC', MARGIN_L, 16);
-
-    // Right side
-    setFont('bold', 9, NAVY);
-    doc.text('SaaS Recurring Services Agreement', PAGE_W - MARGIN_R, 11, {
-      align: 'right',
-    });
-    setFont('normal', 8, BODY);
-    doc.text(
-      `Agreement #${contract.agreement_number}`,
-      PAGE_W - MARGIN_R,
-      16,
-      { align: 'right' },
-    );
-
-    // Thin line below header
-    doc.setDrawColor(...GOLD);
-    doc.setLineWidth(0.5);
-    doc.line(0, 25, PAGE_W, 25);
-
-    // ── Footer ───────────────────────────────────────────────────
-    const footerY = PAGE_H - 10;
-
-    // Thin line above footer
-    doc.setDrawColor(...BORDER_GRAY);
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN_L, footerY - 4, PAGE_W - MARGIN_R, footerY - 4);
-
-    setFont('normal', 7, BODY);
-    doc.text(`Agreement #${contract.agreement_number}`, MARGIN_L, footerY);
-    doc.text(TEMPLATE_VERSION, PAGE_W / 2, footerY, { align: 'center' });
-    doc.text(`Page ${p} of ${totalPages}`, PAGE_W - MARGIN_R, footerY, {
-      align: 'right',
-    });
-
-    // Unsigned watermark
-    if (contract.status !== 'signed') {
-      setFont('bold', 7, [180, 50, 50]);
-      doc.text(
-        'UNSIGNED \u2013 FOR REVIEW ONLY',
-        PAGE_W / 2,
-        footerY + 4,
-        { align: 'center' },
-      );
-    }
+    drawFooter(p, totalPages);
   }
 
   return doc;
