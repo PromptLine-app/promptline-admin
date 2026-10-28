@@ -349,7 +349,7 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
   doc.line(MARGIN_L, curY + 1.8, 56, curY + 1.8);
   curY += 6;
 
-  const p1Terms = [
+  const allTerms = [
     {
       title: '1. Parties and Definitions',
       body: `This Recurring Services Agreement is entered into between Theoremlabs Partners LLC ("Provider") and ${contract.legal_business_name} ("Customer"). Capitalized terms have the meanings given in this Agreement and its Schedules, which control in the order: Special Terms, Order Summary, these Terms.`,
@@ -362,35 +362,6 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
       title: '3. Term, Renewal and Cancellation',
       body: `The subscription begins on ${contract.service_start_date} on a ${contract.commitment_months > 1 ? `${contract.commitment_months}-month` : 'month-to-month'} committed basis and renews automatically for like periods unless either party gives written notice at least 30 days before renewal.`,
     },
-  ];
-
-  for (const t of p1Terms) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...DARK_NAVY);
-    doc.text(t.title, MARGIN_L, curY);
-    curY += 3.8;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...SLATE_BODY);
-    const lines = doc.splitTextToSize(t.body, CONTENT_W);
-    for (const l of lines) {
-      doc.text(l, MARGIN_L, curY);
-      curY += 3.5;
-    }
-    curY += 2;
-  }
-
-  // ==================================================================
-  // PAGE 2
-  // ==================================================================
-  doc.addPage();
-  drawHeader();
-
-  let p2Y = 30;
-
-  const p2Terms = [
     {
       title: '4. Fees and Overages',
       body: `Customer authorizes recurring charges per the Order Summary. Billable calls exceeding the monthly allowance are charged at ${formatUsd(contract.overage_rate_cents)} per call. Taxes are calculated by Provider's billing provider at invoicing. Disputes must be raised in writing within 30 days of invoice.`,
@@ -436,43 +407,66 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
     },
   ];
 
-  for (const t of p2Terms) {
+  let currentPage = 1;
+  const P1_MAX_Y = 270;
+
+  for (let i = 0; i < allTerms.length; i++) {
+    const t = allTerms[i];
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    const lines = doc.splitTextToSize(t.body, CONTENT_W);
+    const termHeight = 3.8 + lines.length * 3.4 + 2.2;
+
+    if (currentPage === 1 && curY + termHeight > P1_MAX_Y) {
+      doc.addPage();
+      drawHeader();
+      curY = 32;
+      currentPage = 2;
+    }
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(...DARK_NAVY);
-    doc.text(t.title, MARGIN_L, p2Y);
-    p2Y += 3.8;
+    doc.text(t.title, MARGIN_L, curY);
+    curY += 3.8;
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(...SLATE_BODY);
-    const lines = doc.splitTextToSize(t.body, CONTENT_W);
     for (const l of lines) {
-      doc.text(l, MARGIN_L, p2Y);
-      p2Y += 3.4;
+      doc.text(l, MARGIN_L, curY);
+      curY += 3.4;
     }
-    p2Y += 1.8;
+    curY += 2.2;
+  }
+
+  // Ensure Page 2 exists for signatures
+  if (currentPage === 1) {
+    doc.addPage();
+    drawHeader();
+    curY = 32;
+    currentPage = 2;
   }
 
   // Section: Signatures
-  p2Y += 3;
+  let sigY = Math.max(curY + 10, 190);
   doc.setFont('times', 'bold');
   doc.setFontSize(12.5);
   doc.setTextColor(...NAVY);
-  doc.text('Signatures', MARGIN_L, p2Y);
+  doc.text('Signatures', MARGIN_L, sigY);
   doc.setDrawColor(...GOLD);
   doc.setLineWidth(0.8);
-  doc.line(MARGIN_L, p2Y + 1.8, 37, p2Y + 1.8);
-  p2Y += 6;
+  doc.line(MARGIN_L, sigY + 1.8, 37, sigY + 1.8);
+  sigY += 6;
 
   // Subheadings
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...GOLD);
-  doc.text('CUSTOMER', MARGIN_L, p2Y);
-  doc.text('PROVIDER', rBoxX, p2Y);
+  doc.text('CUSTOMER', MARGIN_L, sigY);
+  doc.text('PROVIDER', rBoxX, sigY);
 
-  const sigLineY = p2Y + 17;
+  const sigLineY = sigY + 17;
   doc.setDrawColor(...SLATE_MUTED);
   doc.setLineWidth(0.4);
   doc.line(MARGIN_L, sigLineY, 90, sigLineY);
