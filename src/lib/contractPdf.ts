@@ -115,9 +115,10 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
   doc.line(MARGIN_L, 45.8, 31, 45.8);
 
   // Boxes
-  const boxY = 48.5;
-  const boxH = 26;
+  const boxY = 47.5;
+  const boxH = 28;
   const boxW = 84;
+  const innerW = boxW - 9; // 75mm usable width inside each box
 
   // Provider Box (Left)
   doc.setFillColor(250, 248, 245);
@@ -130,18 +131,19 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(...GOLD);
-  doc.text('PROVIDER', 23.5, boxY + 5);
+  doc.text('PROVIDER', 23.5, boxY + 4.8);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(...SLATE_DARK);
-  doc.text('Theoremlabs Partners LLC', 23.5, boxY + 10.5);
+  doc.text('Theoremlabs Partners LLC', 23.5, boxY + 10.2);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(...SLATE_BODY);
-  doc.text('101 S. Tryon St, STE 2700', 23.5, boxY + 15.5);
-  doc.text('Charlotte, NC 28280', 23.5, boxY + 20);
+  doc.text('101 S. Tryon St, STE 2700', 23.5, boxY + 14.8);
+  doc.text('Charlotte, NC 28280', 23.5, boxY + 19.2);
+  doc.text('info@promptline.app', 23.5, boxY + 23.5);
 
   // Customer Box (Right)
   const rBoxX = 108;
@@ -155,36 +157,41 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(...GOLD);
-  doc.text('CUSTOMER', rBoxX + 5.5, boxY + 5);
+  doc.text('CUSTOMER', rBoxX + 5.5, boxY + 4.8);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(...SLATE_DARK);
-  const custNameLines = doc.splitTextToSize(
-    contract.legal_business_name,
-    boxW - 8
-  );
-  doc.text(custNameLines[0], rBoxX + 5.5, boxY + 10.5);
+  const custName = doc.splitTextToSize(
+    contract.legal_business_name || '',
+    innerW
+  )[0] || '';
+  doc.text(custName, rBoxX + 5.5, boxY + 10.2);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(...SLATE_BODY);
   const addrParts = [
     contract.billing_address,
     contract.state,
     contract.country,
   ].filter(Boolean);
-  doc.text(addrParts.join(', '), rBoxX + 5.5, boxY + 15.5);
+  const addrLines = doc.splitTextToSize(addrParts.join(', '), innerW);
+  doc.text(addrLines[0] || '', rBoxX + 5.5, boxY + 14.8);
 
-  const contactParts = [
-    contract.primary_contact_name,
+  const contactName = contract.primary_contact_name || '';
+  const contactLines = doc.splitTextToSize(contactName, innerW);
+  doc.text(contactLines[0] || '', rBoxX + 5.5, boxY + 19.2);
+
+  const contactDetails = [
     contract.primary_contact_email,
     contract.primary_contact_phone,
   ].filter(Boolean);
-  doc.text(contactParts.join('  |  '), rBoxX + 5.5, boxY + 20);
+  const detailLines = doc.splitTextToSize(contactDetails.join('  |  '), innerW);
+  doc.text(detailLines[0] || '', rBoxX + 5.5, boxY + 23.5);
 
   // Section: Order Summary
-  const osY = 80.5;
+  const osY = 81.5;
   doc.setFont('times', 'bold');
   doc.setFontSize(12.5);
   doc.setTextColor(...NAVY);
@@ -375,7 +382,7 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
     },
     {
       title: '6. Support',
-      body: `Support is provided via ${contract.support_channel || 'email'} at the ${capitalize(contract.support_tier)} tier, ${contract.support_hours || 'Mon–Fri 9am–5pm ET'}.${contract.sla_guaranteed ? ' A guaranteed SLA is provided per the attached SLA exhibit.' : ' Service levels are as defined in the attached SLA exhibit.'}`,
+      body: `Support is provided via ${(contract.support_channel || 'email').toLowerCase()} at ${contract.support_email || 'info@promptline.app'} at the ${capitalize(contract.support_tier)} tier, ${contract.support_hours || 'Mon–Fri 9am–5pm ET'}.${contract.sla_guaranteed ? ' A guaranteed SLA is provided per the attached SLA exhibit.' : ' Service levels are as defined in the attached SLA exhibit.'}`,
     },
     {
       title: '7. Customer Responsibilities',

@@ -111,7 +111,7 @@ const DEFAULT_TERMS_CLAUSES: ContractClause[] = [
   {
     id: 'c6',
     title: 'Support',
-    body: 'Support is provided via {support_channel} at the {support_tier} tier, {support_hours}. Service levels are as defined in the attached SLA exhibit.',
+    body: 'Support is provided via {support_channel} at {support_email} at the {support_tier} tier, {support_hours}. Service levels are as defined in the attached SLA exhibit.',
   },
   {
     id: 'c7',
@@ -242,7 +242,7 @@ const blankDraft = (): ContractDraft => ({
   integration_notes: '',
   support_channel: 'Email',
   support_tier: 'standard',
-  support_email: 'support@promptline.ai',
+  support_email: 'info@promptline.app',
   support_hours: 'Mon–Fri 9am–5pm ET',
   sla_guaranteed: false,
 
@@ -280,7 +280,8 @@ const interpolateClause = (template: string, draft: ContractDraft): string => {
       /\{support_tier\}/g,
       draft.support_tier.charAt(0).toUpperCase() + draft.support_tier.slice(1)
     )
-    .replace(/\{support_channel\}/g, draft.support_channel || 'email')
+    .replace(/\{support_channel\}/g, (draft.support_channel || 'email').toLowerCase())
+    .replace(/\{support_email\}/g, draft.support_email?.trim() || 'info@promptline.app')
     .replace(/\{support_hours\}/g, draft.support_hours || 'Mon–Fri 9am–5pm ET')
     .replace(
       /\{integration_fee\}/g,
@@ -698,7 +699,7 @@ export const BusinessContractPage = () => {
       integration_notes: contract.integration_notes || '',
       support_channel: contract.support_channel || 'Email',
       support_tier: contract.support_tier || 'standard',
-      support_email: contract.support_email || 'support@promptline.ai',
+      support_email: contract.support_email || 'info@promptline.app',
       support_hours: contract.support_hours || 'Mon–Fri 9am–5pm ET',
       sla_guaranteed: contract.sla_guaranteed || false,
       terms_clauses:
@@ -1205,7 +1206,7 @@ export const BusinessContractPage = () => {
             type="email"
             value={draft.support_email}
             onChange={(e) => patch({ support_email: e.target.value })}
-            placeholder="support@promptline.ai"
+            placeholder="info@promptline.app"
           />
         </div>
 
