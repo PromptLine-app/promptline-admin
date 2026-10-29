@@ -349,7 +349,7 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
   doc.line(MARGIN_L, curY + 1.8, 56, curY + 1.8);
   curY += 6;
 
-  const allTerms = [
+  const defaultTerms = [
     {
       title: '1. Parties and Definitions',
       body: `This Recurring Services Agreement is entered into between Theoremlabs Partners LLC ("Provider") and ${contract.legal_business_name} ("Customer"). Capitalized terms have the meanings given in this Agreement and its Schedules, which control in the order: Special Terms, Order Summary, these Terms.`,
@@ -360,7 +360,7 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
     },
     {
       title: '3. Term, Renewal and Cancellation',
-      body: `The subscription begins on ${contract.service_start_date} on a ${contract.commitment_months > 1 ? `${contract.commitment_months}-month` : 'month-to-month'} committed basis and renews automatically for like periods unless either party gives written notice at least 30 days before renewal.`,
+      body: `The subscription begins on ${contract.service_start_date} on a ${contract.commitment_months > 1 ? `${contract.commitment_months}-month` : 'month-to-month'} committed basis and renews automatically for like periods unless either party gives written notice at least ${contract.renewal_notice_days || 30} days before renewal.`,
     },
     {
       title: '4. Fees and Overages',
@@ -375,7 +375,7 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
     },
     {
       title: '6. Support',
-      body: `Support is provided via email at the ${capitalize(contract.support_tier)} tier, Mon–Fri 9am–5pm ET. Service levels are as defined in the attached SLA exhibit.`,
+      body: `Support is provided via ${contract.support_channel || 'email'} at the ${capitalize(contract.support_tier)} tier, ${contract.support_hours || 'Mon–Fri 9am–5pm ET'}.${contract.sla_guaranteed ? ' A guaranteed SLA is provided per the attached SLA exhibit.' : ' Service levels are as defined in the attached SLA exhibit.'}`,
     },
     {
       title: '7. Customer Responsibilities',
@@ -406,6 +406,13 @@ export function generateContractPdf(contract: TenantContract): jsPDF {
       body: 'This Agreement is governed by the laws of the State of North Carolina. Electronic signatures are binding. Amendments must be in writing and signed by both parties.',
     },
   ];
+
+  const allTerms = (contract.terms_clauses && contract.terms_clauses.length > 0)
+    ? contract.terms_clauses.map((t, idx) => {
+        const title = /^\d+\./.test(t.title) ? t.title : `${idx + 1}. ${t.title}`;
+        return { title, body: t.body };
+      })
+    : defaultTerms;
 
   let currentPage = 1;
   const P1_MAX_Y = 270;

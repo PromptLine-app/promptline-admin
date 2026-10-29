@@ -1,38 +1,61 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
 import { useAuth } from '@/auth/useAuth';
 import { useToast } from '@/components/common/Toast';
-import { PageHeader } from '@/components/common/PageHeader';
-import { BusinessTabs } from '@/components/businesses/BusinessTabs';
+import { BusinessSubLayout } from '@/components/businesses/BusinessSubLayout';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { DataTable, ColumnDef } from '@/components/common/DataTable';
 import { reportError } from '@/lib/sentry';
 import { formatUsd } from '@/types/domain';
-import type { TenantContract, ContractStatus, BillingCadence, SupportTier } from '@/types/domain';
+import type {
+  TenantContract,
+  ContractStatus,
+  BillingCadence,
+  SupportTier,
+  ContractClause,
+} from '@/types/domain';
 import { generateContractPdf } from '@/lib/contractPdf';
-import { FiArrowLeft, FiDownload, FiPlus, FiRefreshCw, FiFileText, FiSave } from 'react-icons/fi';
+import {
+  FiArrowLeft,
+  FiDownload,
+  FiPlus,
+  FiRefreshCw,
+  FiFileText,
+  FiX,
+  FiRotateCcw,
+  FiChevronDown,
+  FiChevronUp,
+} from 'react-icons/fi';
 
 /* ------------------------------------------------------------------ */
-/*  Constants                                                         */
+/*  Constants & Options                                               */
 /* ------------------------------------------------------------------ */
 
 const PLAN_TIERS = [
-  { value: 'starter', label: 'Starter', rate: 9900, calls: 100 },
-  { value: 'pro', label: 'Pro', rate: 29900, calls: 500 },
-  { value: 'enterprise', label: 'Enterprise', rate: 49900, calls: 1000 },
+  { value: 'starter', label: 'Starter', rate: 9900, calls: 100, overage: 99 },
+  { value: 'pro', label: 'Pro', rate: 29900, calls: 500, overage: 100 },
+  { value: 'enterprise', label: 'Enterprise', rate: 49900, calls: 1000, overage: 100, quoteBased: true },
 ];
 
 const BILLING_CADENCES: { value: BillingCadence; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
-  { value: 'annual_prepaid', label: 'Annual (Prepaid)' },
+  { value: 'annual_prepaid', label: 'Annual prepaid' },
 ];
 
 const COMMITMENT_OPTIONS = [
-  { value: 1, label: '1 Month (Month-to-Month)' },
-  { value: 3, label: '3 Months' },
-  { value: 6, label: '6 Months' },
-  { value: 12, label: '12 Months' },
+  { value: 1, label: 'Month-to-month' },
+  { value: 3, label: '3 months' },
+  { value: 6, label: '6 months' },
+  { value: 12, label: '12-month commitment' },
+  { value: 24, label: '24 months' },
+];
+
+const SUPPORT_CHANNELS = [
+  'Email',
+  'Phone',
+  'Slack / Discord',
+  'Dedicated Account Manager',
 ];
 
 const SUPPORT_TIERS: { value: SupportTier; label: string }[] = [
@@ -41,29 +64,90 @@ const SUPPORT_TIERS: { value: SupportTier; label: string }[] = [
   { value: 'dedicated', label: 'Dedicated' },
 ];
 
-const TC_CLAUSES = [
-  '1. Definitions',
-  '2. Service Description & Scope',
-  '3. Term & Renewal',
-  '4. Fees, Billing & Payment',
-  '5. Usage Limits & Overage',
-  '6. Customer Obligations',
-  '7. Data Privacy & Security',
-  '8. Intellectual Property',
-  '9. Warranties & Disclaimers',
-  '10. Limitation of Liability',
-  '11. Indemnification',
-  '12. Termination',
-  '13. General Provisions',
+const DISCOUNT_OPTIONS = [
+  { value: 0, label: 'None' },
+  { value: 5, label: '5%' },
+  { value: 10, label: '10%' },
+  { value: 15, label: '15%' },
+  { value: 20, label: '20%' },
+  { value: -1, label: 'Custom' },
 ];
 
 const WIZARD_STEPS = [
-  'Customer Details',
-  'Plan & Billing',
-  'Integrations & Support',
-  'Terms Preview',
-  'Contract Preview',
-  'Generate',
+  '1. Customer',
+  '2. Plan & Billing',
+  '3. Integrations & Support',
+  '4. Terms',
+  '5. Preview',
+  '6. Generate',
+];
+
+const DEFAULT_TERMS_CLAUSES: ContractClause[] = [
+  {
+    id: 'c1',
+    title: 'Parties and Definitions',
+    body: 'This Recurring Services Agreement is entered into between {provider} ("Provider") and {customer} ("Customer"). Capitalized terms have the meanings given in this Agreement and its Schedules, which control in the order: Special Terms, Order Summary, these Terms.',
+  },
+  {
+    id: 'c2',
+    title: 'Services and Usage',
+    body: 'Provider will make the PromptLine {plan} plan available to Customer, including {calls} billable calls per billing month. Unused calls do not roll over. Billable calls are defined in the Call Usage Schedule as approved by Provider.',
+  },
+  {
+    id: 'c3',
+    title: 'Term, Renewal and Cancellation',
+    body: 'The subscription begins on {start} on a {term} committed basis and renews automatically for like periods unless either party gives written notice at least {notice} days before renewal.',
+  },
+  {
+    id: 'c4',
+    title: 'Fees and Overages',
+    body: "Customer authorizes recurring charges per the Order Summary. Billable calls exceeding the monthly allowance are charged at {overage} per call. Taxes are calculated by Provider's billing provider at invoicing. Disputes must be raised in writing within 30 days of invoice.",
+  },
+  {
+    id: 'c5',
+    title: 'Implementation and Integrations',
+    body: 'No custom integration is included in this Agreement.',
+  },
+  {
+    id: 'c6',
+    title: 'Support',
+    body: 'Support is provided via {support_channel} at the {support_tier} tier, {support_hours}. Service levels are as defined in the attached SLA exhibit.',
+  },
+  {
+    id: 'c7',
+    title: 'Customer Responsibilities',
+    body: 'Customer will use the Services lawfully, honor opt-out requests, and is responsible for obtaining all consents required under TCPA, telemarketing and state recording and SMS laws.',
+  },
+  {
+    id: 'c8',
+    title: 'Recording, AI Disclosure and Limitations',
+    body: 'Calls may be recorded and transcribed. AI agents may produce errors, inaccurate bookings or outages. The Services are not intended for emergency or high-risk use. Except as expressly stated, the Services are provided without warranties.',
+  },
+  {
+    id: 'c9',
+    title: 'Data Privacy',
+    body: 'Each party will comply with applicable data protection law. Data processing, security, retention and subprocessors are governed by the Data Processing Addendum where attached.',
+  },
+  {
+    id: 'c10',
+    title: 'IP and Confidentiality',
+    body: "Provider retains all rights in the Services. Customer retains rights in Customer data. Each party will protect the other's confidential information.",
+  },
+  {
+    id: 'c11',
+    title: 'Limitation of Liability',
+    body: "Neither party is liable for indirect or consequential damages. Each party's aggregate liability is capped as set out in counsel-approved terms, except where non-waivable law provides otherwise.",
+  },
+  {
+    id: 'c12',
+    title: 'Termination',
+    body: 'Either party may terminate for material breach not cured within 30 days of written notice. Provisions that by nature survive termination will survive.',
+  },
+  {
+    id: 'c13',
+    title: 'General',
+    body: 'This Agreement is governed by the laws of the State of North Carolina. Electronic signatures are binding. Amendments must be in writing and signed by both parties.',
+  },
 ];
 
 const generateAgreementNumber = () => {
@@ -75,11 +159,13 @@ const generateAgreementNumber = () => {
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 /* ------------------------------------------------------------------ */
-/*  Draft shape (form state before saving)                            */
+/*  Draft shape (100% editable form state)                            */
 /* ------------------------------------------------------------------ */
 
 type ContractDraft = {
   agreement_number: string;
+
+  // Step 1: Customer details
   legal_business_name: string;
   dba_name: string;
   billing_address: string;
@@ -95,6 +181,8 @@ type ContractDraft = {
   agreement_date: string;
   service_start_date: string;
   internal_notes: string;
+
+  // Step 2: Plan & Billing
   plan_tier: string;
   billing_cadence: BillingCadence;
   commitment_months: number;
@@ -104,9 +192,20 @@ type ContractDraft = {
   net_rate_cents: number;
   included_calls: number;
   overage_rate_cents: number;
+  renewal_notice_days: number;
+
+  // Step 3: Integrations & Support
+  custom_integration_required: boolean;
   integration_fees_dollars: number;
   integration_notes: string;
+  support_channel: string;
   support_tier: SupportTier;
+  support_email: string;
+  support_hours: string;
+  sla_guaranteed: boolean;
+
+  // Step 4: Terms (editable clauses)
+  terms_clauses: ContractClause[];
 };
 
 const blankDraft = (): ContractDraft => ({
@@ -126,19 +225,73 @@ const blankDraft = (): ContractDraft => ({
   agreement_date: todayStr(),
   service_start_date: todayStr(),
   internal_notes: '',
-  plan_tier: 'starter',
+
+  plan_tier: 'pro',
   billing_cadence: 'monthly',
   commitment_months: 1,
-  base_rate_cents: 9900,
+  base_rate_cents: 29900,
   discount_percent: 0,
   discount_label: '',
-  net_rate_cents: 9900,
-  included_calls: 100,
-  overage_rate_cents: 99,
+  net_rate_cents: 29900,
+  included_calls: 500,
+  overage_rate_cents: 100,
+  renewal_notice_days: 30,
+
+  custom_integration_required: false,
   integration_fees_dollars: 0,
   integration_notes: '',
+  support_channel: 'Email',
   support_tier: 'standard',
+  support_email: 'support@promptline.ai',
+  support_hours: 'Mon–Fri 9am–5pm ET',
+  sla_guaranteed: false,
+
+  terms_clauses: DEFAULT_TERMS_CLAUSES.map((c) => ({ ...c })),
 });
+
+/* ------------------------------------------------------------------ */
+/*  Interpolate variables in clause template                          */
+/* ------------------------------------------------------------------ */
+
+const interpolateClause = (template: string, draft: ContractDraft): string => {
+  const planName = draft.plan_tier
+    ? draft.plan_tier.charAt(0).toUpperCase() + draft.plan_tier.slice(1)
+    : 'Pro';
+  const overageFormatted = `$${(draft.overage_rate_cents / 100).toFixed(2)}`;
+  const termFormatted =
+    draft.commitment_months > 1
+      ? `${draft.commitment_months}-month`
+      : 'month-to-month';
+  const integrationText =
+    draft.integration_fees_dollars > 0
+      ? `Custom integration and setup is included as specified in the Order Summary (${formatUsd(Math.round(draft.integration_fees_dollars * 100))}${draft.integration_notes ? `: ${draft.integration_notes}` : ''}).`
+      : 'No custom integration is included in this Agreement.';
+
+  return template
+    .replace(/\{provider\}/g, 'Theoremlabs Partners LLC')
+    .replace(/\{customer\}/g, draft.legal_business_name.trim() || '[Customer]')
+    .replace(/\{plan\}/g, planName)
+    .replace(/\{calls\}/g, draft.included_calls.toLocaleString('en-US'))
+    .replace(/\{overage\}/g, overageFormatted)
+    .replace(/\{start\}/g, draft.service_start_date || todayStr())
+    .replace(/\{term\}/g, termFormatted)
+    .replace(/\{notice\}/g, String(draft.renewal_notice_days || 30))
+    .replace(
+      /\{support_tier\}/g,
+      draft.support_tier.charAt(0).toUpperCase() + draft.support_tier.slice(1)
+    )
+    .replace(/\{support_channel\}/g, draft.support_channel || 'email')
+    .replace(/\{support_hours\}/g, draft.support_hours || 'Mon–Fri 9am–5pm ET')
+    .replace(
+      /\{integration_fee\}/g,
+      formatUsd(Math.round(draft.integration_fees_dollars * 100))
+    )
+    .replace(
+      /\{onboarding_fee\}/g,
+      formatUsd(Math.round(draft.integration_fees_dollars * 100))
+    )
+    .replace(/\{integration_text\}/g, integrationText);
+};
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                         */
@@ -154,29 +307,34 @@ export const BusinessContractPage = () => {
   const [contracts, setContracts] = useState<TenantContract[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Wizard
+  // Wizard state
   const [wizardMode, setWizardMode] = useState(false);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<ContractDraft>(blankDraft());
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
 
+  // Step 5 interactive preview state
+  const [previewTestCalls, setPreviewTestCalls] = useState(550);
+  const [customerExpanded, setCustomerExpanded] = useState(true);
+
   /* ---- helpers ---- */
   const patch = (updates: Partial<ContractDraft>) => {
     setDraft((prev) => {
       const next = { ...prev, ...updates };
-      // Recalculate derived fields
-      if ('plan_tier' in updates) {
-        const tier = PLAN_TIERS.find((t) => t.value === next.plan_tier);
-        if (tier) {
-          next.base_rate_cents = tier.rate;
-          next.included_calls = tier.calls;
-          next.net_rate_cents = Math.round(tier.rate * (1 - next.discount_percent / 100));
-        }
+
+      // Base rate edits recalculate net rate
+      if ('base_rate_cents' in updates || 'discount_percent' in updates) {
+        const discountMultiplier = Math.max(0, 1 - next.discount_percent / 100);
+        next.net_rate_cents = Math.round(next.base_rate_cents * discountMultiplier);
       }
-      if ('discount_percent' in updates) {
-        next.net_rate_cents = Math.round(next.base_rate_cents * (1 - next.discount_percent / 100));
+
+      // If custom integration unchecked, zero out fee
+      if (updates.custom_integration_required === false) {
+        next.integration_fees_dollars = 0;
+        next.integration_notes = '';
       }
+
       return next;
     });
   };
@@ -207,14 +365,48 @@ export const BusinessContractPage = () => {
     try {
       const { data: tenant } = await supabase.from('tenants').select('*').eq('id', id).single();
       const { data: billing } = await supabase.from('tenant_billing').select('*').eq('tenant_id', id).single();
-      const { data: owner } = await supabase.from('users').select('full_name, email, phone').eq('tenant_id', id).limit(1).single();
+      const { data: owner } = await supabase
+        .from('users')
+        .select('full_name, email, phone')
+        .eq('tenant_id', id)
+        .limit(1)
+        .single();
 
       const updates: Partial<ContractDraft> = {};
       if (tenant?.company_name) updates.legal_business_name = tenant.company_name;
-      if ((tenant as Record<string, unknown>)?.state) updates.state = (tenant as Record<string, unknown>).state as string;
-      if (owner?.full_name) updates.primary_contact_name = owner.full_name;
-      if (owner?.email) updates.primary_contact_email = owner.email;
-      if ((owner as Record<string, unknown>)?.phone) updates.primary_contact_phone = (owner as Record<string, unknown>).phone as string;
+
+      // Address
+      const addressParts = [
+        tenant?.business_address,
+        tenant?.city,
+      ].filter(Boolean);
+      if (addressParts.length > 0) {
+        updates.billing_address = addressParts.join(', ');
+      }
+      if (tenant?.state) updates.state = tenant.state;
+      if (tenant?.country) updates.country = tenant.country;
+
+      // Contact & Signer
+      if (owner?.full_name) {
+        updates.primary_contact_name = owner.full_name;
+        updates.authorized_signer_name = owner.full_name;
+      }
+      if (owner?.email) {
+        updates.primary_contact_email = owner.email;
+        updates.authorized_signer_email = owner.email;
+      }
+      if (owner?.phone) {
+        updates.primary_contact_phone = owner.phone;
+      } else if (tenant?.business_phone) {
+        updates.primary_contact_phone = tenant.business_phone;
+      }
+
+      // Billing info
+      if (billing?.billing_email) {
+        updates.accounts_payable_email = billing.billing_email;
+      } else if (owner?.email) {
+        updates.accounts_payable_email = owner.email;
+      }
 
       if (billing?.plan_tier) {
         const tier = PLAN_TIERS.find((t) => t.value === billing.plan_tier);
@@ -222,31 +414,31 @@ export const BusinessContractPage = () => {
           updates.plan_tier = tier.value;
           updates.base_rate_cents = tier.rate;
           updates.included_calls = tier.calls;
+          updates.overage_rate_cents = tier.overage;
           updates.net_rate_cents = tier.rate;
         }
       }
-      if (billing?.subscription_amount_cents) {
+      if (billing?.subscription_amount_cents && billing.subscription_amount_cents > 0) {
         updates.base_rate_cents = billing.subscription_amount_cents;
         updates.net_rate_cents = billing.subscription_amount_cents;
       }
-      if (billing?.calls_included) updates.included_calls = billing.calls_included;
+      if (billing?.calls_included && billing.calls_included > 0) {
+        updates.included_calls = billing.calls_included;
+      }
 
       patch(updates);
     } catch {
-      // Non-fatal — wizard can still be used manually
+      // Non-fatal — wizard remains fully editable
     }
   }, [id]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on mount; setState runs after await, not during render
     fetchContracts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally limited to avoid refetch loop
-  }, [id]);
+  }, [fetchContracts]);
 
   useEffect(() => {
     autoFillDraft();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [autoFillDraft]);
 
   /* ---- open wizard ---- */
   const openWizard = () => {
@@ -257,30 +449,73 @@ export const BusinessContractPage = () => {
     autoFillDraft();
   };
 
-  /* ---- validation ---- */
+  /* ---- calculation helpers ---- */
+  const discountCents = Math.round(draft.base_rate_cents * (draft.discount_percent / 100));
+  const integrationCents = Math.round(draft.integration_fees_dollars * 100);
+
+  const projectedInvoice =
+    draft.billing_cadence === 'annual_prepaid'
+      ? draft.base_rate_cents * (draft.commitment_months > 1 ? draft.commitment_months : 12) -
+        discountCents +
+        integrationCents
+      : draft.net_rate_cents + integrationCents;
+
+  /* ---- validation issues counter ---- */
+  const validationIssues = useMemo(() => {
+    const issues: string[] = [];
+    if (!draft.legal_business_name.trim()) issues.push('Legal business name required');
+    if (!draft.billing_address.trim()) issues.push('Billing address required');
+    if (!draft.state.trim()) issues.push('State required');
+    if (!draft.country.trim()) issues.push('Country required');
+    if (!draft.primary_contact_name.trim()) issues.push('Primary contact name required');
+    if (!draft.primary_contact_email.trim()) issues.push('Primary contact email required');
+    if (!draft.primary_contact_phone.trim()) issues.push('Primary contact phone required');
+    if (!draft.authorized_signer_name.trim()) issues.push('Authorized signer name required');
+    if (!draft.authorized_signer_title.trim()) issues.push('Authorized signer title required');
+    if (!draft.authorized_signer_email.trim()) issues.push('Authorized signer email required');
+    if (draft.base_rate_cents <= 0) issues.push('Base rate must be positive');
+    if (draft.included_calls <= 0) issues.push('Included calls must be positive');
+    if (draft.terms_clauses.length === 0) issues.push('At least one contract clause required');
+    return issues;
+  }, [draft]);
+
   const validateStep = (s: number): string | null => {
-    if (s === 0 && !draft.legal_business_name.trim()) return 'Legal Business Name is required.';
+    if (s === 0) {
+      if (!draft.legal_business_name.trim()) return 'Legal Business Name is required.';
+    }
     if (s === 1) {
-      if (!draft.plan_tier) return 'Select a plan tier.';
       if (draft.base_rate_cents <= 0) return 'Base rate must be greater than zero.';
       if (draft.included_calls <= 0) return 'Included calls must be greater than zero.';
+    }
+    if (s === 3) {
+      if (draft.terms_clauses.length === 0) return 'Please add at least one terms clause.';
     }
     return null;
   };
 
   const handleNext = () => {
     const err = validateStep(step);
-    if (err) { toast(err, 'error'); return; }
+    if (err) {
+      toast(err, 'error');
+      return;
+    }
     setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1));
   };
 
   const handleBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  /* ---- generate ---- */
+  /* ---- generate PDF & save contract ---- */
   const handleGenerate = async () => {
     if (!id || !adminUser) return;
     setGenerating(true);
     try {
+      // 1. Resolve all template tokens in the clauses
+      const resolvedClauses = draft.terms_clauses.map((c) => ({
+        ...c,
+        body: interpolateClause(c.body, draft),
+      }));
+
+      // 2. Prepare contract row
       const contractRow: Omit<TenantContract, 'id' | 'created_at' | 'updated_at'> = {
         tenant_id: id,
         agreement_number: draft.agreement_number,
@@ -305,9 +540,16 @@ export const BusinessContractPage = () => {
         net_rate_cents: draft.net_rate_cents,
         included_calls: draft.included_calls,
         overage_rate_cents: draft.overage_rate_cents,
+        renewal_notice_days: draft.renewal_notice_days,
+        custom_integration_required: draft.custom_integration_required,
         integration_fees_cents: Math.round(draft.integration_fees_dollars * 100),
         integration_notes: draft.integration_notes || null,
         support_tier: draft.support_tier,
+        support_channel: draft.support_channel,
+        support_email: draft.support_email,
+        support_hours: draft.support_hours,
+        sla_guaranteed: draft.sla_guaranteed,
+        terms_clauses: resolvedClauses,
         agreement_date: draft.agreement_date,
         service_start_date: draft.service_start_date,
         internal_notes: draft.internal_notes || null,
@@ -316,24 +558,48 @@ export const BusinessContractPage = () => {
         generated_by: adminUser.id,
       };
 
-      // Upsert contract
+      // 3. Save row to database (with fallback if schema hasn't been updated)
+      let savedContract: TenantContract;
       const { data: saved, error: saveErr } = await supabase
         .from('tenant_contracts')
         .upsert(contractRow, { onConflict: 'agreement_number' })
         .select()
         .single();
+
       if (saveErr) {
-        console.error('Error saving contract to database:', saveErr);
-        throw new Error(`Database error: ${saveErr.message}`);
+        // Fallback: retry with core columns only in case custom columns haven't been run yet
+        const {
+          terms_clauses: _tc,
+          renewal_notice_days: _rnd,
+          custom_integration_required: _cir,
+          support_channel: _sc,
+          support_email: _se,
+          support_hours: _sh,
+          sla_guaranteed: _sg,
+          ...coreRow
+        } = contractRow;
+
+        const { data: fallbackSaved, error: fallbackErr } = await supabase
+          .from('tenant_contracts')
+          .upsert(coreRow, { onConflict: 'agreement_number' })
+          .select()
+          .single();
+
+        if (fallbackErr) {
+          console.error('Error saving contract to database:', fallbackErr);
+          throw new Error(`Database save error: ${fallbackErr.message}`);
+        }
+        savedContract = { ...(fallbackSaved as TenantContract), terms_clauses: resolvedClauses };
+      } else {
+        savedContract = saved as TenantContract;
       }
 
-      const contract = saved as TenantContract;
-
-      // Generate PDF
-      const doc = generateContractPdf(contract);
+      // 4. Generate PDF using the resolved clauses
+      const doc = generateContractPdf(savedContract);
       const pdfBlob = doc.output('blob');
-      const storagePath = `${id}/${contract.agreement_number}.pdf`;
+      const storagePath = `${id}/${savedContract.agreement_number}.pdf`;
 
+      // 5. Upload to storage bucket
       const { error: uploadErr } = await supabase.storage
         .from('contracts')
         .upload(storagePath, pdfBlob, { upsert: true, contentType: 'application/pdf' });
@@ -342,21 +608,21 @@ export const BusinessContractPage = () => {
         throw new Error(`Storage upload error: ${uploadErr.message}`);
       }
 
-      // Update contract record
+      // 6. Update contract record with pdf path and status
       const { error: updateErr } = await supabase
         .from('tenant_contracts')
         .update({ status: 'generated' as ContractStatus, pdf_storage_path: storagePath })
-        .eq('id', contract.id);
+        .eq('id', savedContract.id);
       if (updateErr) {
         console.error('Error updating contract status:', updateErr);
         throw new Error(`Status update error: ${updateErr.message}`);
       }
 
-      // Download to browser
+      // 7. Download PDF to browser
       const downloadUrl = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `${contract.agreement_number}.pdf`;
+      a.download = `${savedContract.agreement_number}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -378,7 +644,9 @@ export const BusinessContractPage = () => {
   const handleDownloadPdf = async (contract: TenantContract) => {
     if (!contract.pdf_storage_path) return;
     try {
-      const { data, error } = await supabase.storage.from('contracts').download(contract.pdf_storage_path);
+      const { data, error } = await supabase.storage
+        .from('contracts')
+        .download(contract.pdf_storage_path);
       if (error) throw error;
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
@@ -395,14 +663,14 @@ export const BusinessContractPage = () => {
     }
   };
 
-  /* ---- regenerate existing ---- */
+  /* ---- regenerate existing contract ---- */
   const handleRegenerate = async (contract: TenantContract) => {
     setDraft({
       agreement_number: contract.agreement_number,
       legal_business_name: contract.legal_business_name,
       dba_name: contract.dba_name || '',
       billing_address: contract.billing_address || '',
-      country: contract.country,
+      country: contract.country || 'United States',
       state: contract.state || '',
       primary_contact_name: contract.primary_contact_name || '',
       primary_contact_email: contract.primary_contact_email || '',
@@ -423,527 +691,1200 @@ export const BusinessContractPage = () => {
       net_rate_cents: contract.net_rate_cents,
       included_calls: contract.included_calls,
       overage_rate_cents: contract.overage_rate_cents,
+      renewal_notice_days: contract.renewal_notice_days || 30,
+      custom_integration_required:
+        contract.custom_integration_required || contract.integration_fees_cents > 0,
       integration_fees_dollars: contract.integration_fees_cents / 100,
       integration_notes: contract.integration_notes || '',
-      support_tier: contract.support_tier,
+      support_channel: contract.support_channel || 'Email',
+      support_tier: contract.support_tier || 'standard',
+      support_email: contract.support_email || 'support@promptline.ai',
+      support_hours: contract.support_hours || 'Mon–Fri 9am–5pm ET',
+      sla_guaranteed: contract.sla_guaranteed || false,
+      terms_clauses:
+        contract.terms_clauses && contract.terms_clauses.length > 0
+          ? contract.terms_clauses.map((c, i) => ({ id: `c_${i}`, ...c }))
+          : DEFAULT_TERMS_CLAUSES.map((c) => ({ ...c })),
     });
-    setStep(5);
+    setStep(4);
     setGenerated(false);
     setWizardMode(true);
   };
 
   /* ================================================================ */
-  /*  RENDER                                                          */
+  /*  STYLES                                                          */
   /* ================================================================ */
 
-  const latestContract = contracts[0] ?? null;
-
-  /* ---- styles ---- */
-  const stepCircle = (_idx: number, active: boolean, done: boolean): React.CSSProperties => ({
-    width: 32, height: 32, borderRadius: '50%',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontWeight: 700, fontSize: '0.85rem',
-    background: active ? 'hsl(var(--primary))' : done ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--muted))',
-    color: active ? '#fff' : done ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
-    border: active ? 'none' : done ? '2px solid hsl(var(--primary))' : '2px solid hsl(var(--border))',
-    flexShrink: 0,
-  });
-
-  const stepLine: React.CSSProperties = {
-    flex: 1, height: 2, background: 'hsl(var(--border))', margin: '0 4px',
-  };
-
   const labelStyle: React.CSSProperties = {
-    display: 'block', marginBottom: '0.35rem', fontSize: '0.85rem',
-    fontWeight: 600, color: 'hsl(var(--muted-foreground))',
+    display: 'block',
+    marginBottom: '0.35rem',
+    fontSize: '0.75rem',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    color: 'hsl(var(--muted-foreground))',
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '0.55rem 0.75rem', borderRadius: '6px',
-    border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))',
-    fontSize: '0.9rem', color: 'inherit',
+    width: '100%',
+    padding: '0.6rem 0.85rem',
+    borderRadius: '6px',
+    border: '1px solid hsl(var(--border))',
+    background: 'hsl(var(--card))',
+    fontSize: '0.9rem',
+    color: 'inherit',
+    outline: 'none',
   };
-
-  const readonlyInputStyle: React.CSSProperties = {
-    ...inputStyle, background: 'hsl(var(--muted))', cursor: 'default',
-  };
-
-  const radioGroupStyle: React.CSSProperties = {
-    display: 'flex', gap: '0.75rem', flexWrap: 'wrap',
-  };
-
-  const radioCardStyle = (selected: boolean): React.CSSProperties => ({
-    padding: '0.75rem 1rem', borderRadius: '8px', cursor: 'pointer',
-    border: selected ? '2px solid hsl(var(--primary))' : '2px solid hsl(var(--border))',
-    background: selected ? 'hsl(var(--primary) / 0.06)' : 'hsl(var(--card))',
-    fontWeight: selected ? 600 : 400, fontSize: '0.9rem',
-    display: 'flex', alignItems: 'center', gap: '0.5rem',
-  });
 
   const sidebarRowStyle: React.CSSProperties = {
-    display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0',
-    borderBottom: '1px solid hsl(var(--border))', fontSize: '0.85rem',
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '0.45rem 0',
+    borderBottom: '1px solid hsl(var(--border))',
+    fontSize: '0.85rem',
   };
 
-  const discountCents = Math.round(draft.base_rate_cents * (draft.discount_percent / 100));
-  const projectedInvoice =
-    draft.billing_cadence === 'annual_prepaid'
-      ? draft.base_rate_cents * (draft.commitment_months > 1 ? draft.commitment_months : 12) -
-        discountCents +
-        Math.round(draft.integration_fees_dollars * 100)
-      : draft.net_rate_cents + Math.round(draft.integration_fees_dollars * 100);
-
-  /* ---- Sidebar ---- */
-  const renderSidebar = () => (
-    <div style={{
-      flex: '0 0 320px', background: 'hsl(var(--card))', borderRadius: '12px',
-      border: '1px solid hsl(var(--border))', padding: '1.25rem', alignSelf: 'flex-start',
-      position: 'sticky', top: '1rem',
-    }}>
-      <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 700 }}>Order Summary</h4>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Plan</span>
-        <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{draft.plan_tier}</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Base Rate</span>
-        <span>{formatUsd(draft.base_rate_cents)}/mo</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Discount</span>
-        <span>{draft.discount_percent}%</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Net Subscription</span>
-        <span style={{ fontWeight: 600 }}>{formatUsd(draft.net_rate_cents)}/mo</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Billing</span>
-        <span>{draft.billing_cadence === 'monthly' ? 'Monthly' : 'Annual'}</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Commitment</span>
-        <span>{draft.commitment_months} month{draft.commitment_months !== 1 ? 's' : ''}</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Included Calls</span>
-        <span>{draft.included_calls}/mo</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Overage Rate</span>
-        <span>{formatUsd(draft.overage_rate_cents)}/call</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">One-time Fees</span>
-        <span>{formatUsd(Math.round(draft.integration_fees_dollars * 100))}</span>
-      </div>
-      <div style={sidebarRowStyle}>
-        <span className="text-muted">Support</span>
-        <span style={{ textTransform: 'capitalize' }}>{draft.support_tier}</span>
-      </div>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0 0',
-        marginTop: '0.5rem', borderTop: '2px solid hsl(var(--primary))',
-        fontWeight: 700, fontSize: '0.95rem',
-      }}>
-        <span>Projected First Invoice</span>
-        <span style={{ color: 'hsl(var(--primary))' }}>{formatUsd(projectedInvoice)}</span>
-      </div>
-    </div>
-  );
-
-  /* ---- Step indicators ---- */
-  const renderStepIndicators = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-      {WIZARD_STEPS.map((label, idx) => (
-        <div key={label} style={{ display: 'contents' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
-            <div style={stepCircle(idx, idx === step, idx < step)}>{idx + 1}</div>
-            <span style={{
-              fontSize: '0.7rem', fontWeight: idx === step ? 700 : 500, whiteSpace: 'nowrap',
-              color: idx === step ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
-            }}>{label}</span>
-          </div>
-          {idx < WIZARD_STEPS.length - 1 && <div style={stepLine} />}
-        </div>
-      ))}
-    </div>
-  );
+  /* ================================================================ */
+  /*  WIZARD STEP RENDERERS                                           */
+  /* ================================================================ */
 
   /* ---- Step 1: Customer Details ---- */
   const renderStep1 = () => (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem' }}>
+      <div className="form-group">
+        <label style={labelStyle}>Legal Business Name *</label>
+        <input
+          style={inputStyle}
+          value={draft.legal_business_name}
+          onChange={(e) => patch({ legal_business_name: e.target.value })}
+          placeholder="e.g. Acme Corp LLC"
+        />
+      </div>
+
+      <div className="form-group">
+        <label style={labelStyle}>DBA / Trade Name</label>
+        <input
+          style={inputStyle}
+          value={draft.dba_name}
+          onChange={(e) => patch({ dba_name: e.target.value })}
+          placeholder="e.g. Acme Health"
+        />
+      </div>
+
       <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-        <label className="form-label" style={labelStyle}>Legal Business Name *</label>
-        <input className="form-input" style={inputStyle} value={draft.legal_business_name}
-          onChange={(e) => patch({ legal_business_name: e.target.value })} />
+        <label style={labelStyle}>Billing Address *</label>
+        <input
+          style={inputStyle}
+          value={draft.billing_address}
+          onChange={(e) => patch({ billing_address: e.target.value })}
+          placeholder="Street address, Suite, City"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>DBA / Trade Name</label>
-        <input className="form-input" style={inputStyle} value={draft.dba_name}
-          onChange={(e) => patch({ dba_name: e.target.value })} />
+        <label style={labelStyle}>Country *</label>
+        <input
+          style={inputStyle}
+          value={draft.country}
+          onChange={(e) => patch({ country: e.target.value })}
+          placeholder="e.g. United States"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>Billing Address</label>
-        <input className="form-input" style={inputStyle} value={draft.billing_address}
-          onChange={(e) => patch({ billing_address: e.target.value })} />
+        <label style={labelStyle}>State *</label>
+        <input
+          style={inputStyle}
+          value={draft.state}
+          onChange={(e) => patch({ state: e.target.value })}
+          placeholder="e.g. NC or North Carolina"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>Country</label>
-        <input className="form-input" style={inputStyle} value={draft.country}
-          onChange={(e) => patch({ country: e.target.value })} />
+        <label style={labelStyle}>Primary Contact Name *</label>
+        <input
+          style={inputStyle}
+          value={draft.primary_contact_name}
+          onChange={(e) => patch({ primary_contact_name: e.target.value })}
+          placeholder="Full name"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>State</label>
-        <input className="form-input" style={inputStyle} value={draft.state}
-          onChange={(e) => patch({ state: e.target.value })} />
+        <label style={labelStyle}>Primary Contact Email *</label>
+        <input
+          style={inputStyle}
+          type="email"
+          value={draft.primary_contact_email}
+          onChange={(e) => patch({ primary_contact_email: e.target.value })}
+          placeholder="contact@example.com"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>Primary Contact Name</label>
-        <input className="form-input" style={inputStyle} value={draft.primary_contact_name}
-          onChange={(e) => patch({ primary_contact_name: e.target.value })} />
+        <label style={labelStyle}>Primary Contact Phone *</label>
+        <input
+          style={inputStyle}
+          type="tel"
+          value={draft.primary_contact_phone}
+          onChange={(e) => patch({ primary_contact_phone: e.target.value })}
+          placeholder="(555) 000-0000"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>Primary Contact Email</label>
-        <input className="form-input" style={inputStyle} type="email" value={draft.primary_contact_email}
-          onChange={(e) => patch({ primary_contact_email: e.target.value })} />
+        <label style={labelStyle}>Accounts Payable Email</label>
+        <input
+          style={inputStyle}
+          type="email"
+          value={draft.accounts_payable_email}
+          onChange={(e) => patch({ accounts_payable_email: e.target.value })}
+          placeholder="ap@example.com"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>Primary Contact Phone</label>
-        <input className="form-input" style={inputStyle} type="tel" value={draft.primary_contact_phone}
-          onChange={(e) => patch({ primary_contact_phone: e.target.value })} />
+        <label style={labelStyle}>Authorized Signer Name *</label>
+        <input
+          style={inputStyle}
+          value={draft.authorized_signer_name}
+          onChange={(e) => patch({ authorized_signer_name: e.target.value })}
+          placeholder="Full name of signatory"
+        />
       </div>
+
       <div className="form-group">
-        <label className="form-label" style={labelStyle}>Accounts Payable Email</label>
-        <input className="form-input" style={inputStyle} type="email" value={draft.accounts_payable_email}
-          onChange={(e) => patch({ accounts_payable_email: e.target.value })} />
+        <label style={labelStyle}>Authorized Signer Title *</label>
+        <input
+          style={inputStyle}
+          value={draft.authorized_signer_title}
+          onChange={(e) => patch({ authorized_signer_title: e.target.value })}
+          placeholder="e.g. CEO, Managing Member"
+        />
       </div>
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Authorized Signer Name</label>
-        <input className="form-input" style={inputStyle} value={draft.authorized_signer_name}
-          onChange={(e) => patch({ authorized_signer_name: e.target.value })} />
-      </div>
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Authorized Signer Title</label>
-        <input className="form-input" style={inputStyle} value={draft.authorized_signer_title}
-          onChange={(e) => patch({ authorized_signer_title: e.target.value })} />
-      </div>
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Authorized Signer Email</label>
-        <input className="form-input" style={inputStyle} type="email" value={draft.authorized_signer_email}
-          onChange={(e) => patch({ authorized_signer_email: e.target.value })} />
-      </div>
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Agreement Date</label>
-        <input className="form-input" style={inputStyle} type="date" value={draft.agreement_date}
-          onChange={(e) => patch({ agreement_date: e.target.value })} />
-      </div>
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Service Start Date</label>
-        <input className="form-input" style={inputStyle} type="date" value={draft.service_start_date}
-          onChange={(e) => patch({ service_start_date: e.target.value })} />
-      </div>
+
       <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-        <label className="form-label" style={labelStyle}>Internal Notes</label>
-        <textarea className="form-input" style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-          value={draft.internal_notes} onChange={(e) => patch({ internal_notes: e.target.value })} />
+        <label style={labelStyle}>Authorized Signer Email *</label>
+        <input
+          style={inputStyle}
+          type="email"
+          value={draft.authorized_signer_email}
+          onChange={(e) => patch({ authorized_signer_email: e.target.value })}
+          placeholder="signer@example.com"
+        />
+      </div>
+
+      <div className="form-group">
+        <label style={labelStyle}>Agreement Date</label>
+        <input
+          style={inputStyle}
+          type="date"
+          value={draft.agreement_date}
+          onChange={(e) => patch({ agreement_date: e.target.value })}
+        />
+      </div>
+
+      <div className="form-group">
+        <label style={labelStyle}>Service Start Date</label>
+        <input
+          style={inputStyle}
+          type="date"
+          value={draft.service_start_date}
+          onChange={(e) => patch({ service_start_date: e.target.value })}
+        />
+      </div>
+
+      <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <label style={labelStyle}>Internal Notes (Not in contract)</label>
+        <textarea
+          style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }}
+          value={draft.internal_notes}
+          onChange={(e) => patch({ internal_notes: e.target.value })}
+          placeholder="Add any internal onboarding or sales notes here..."
+        />
       </div>
     </div>
   );
 
   /* ---- Step 2: Plan & Billing ---- */
-  const renderStep2 = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Plan Tier */}
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Plan Tier</label>
-        <div style={radioGroupStyle}>
-          {PLAN_TIERS.map((t) => (
-            <label key={t.value} style={radioCardStyle(draft.plan_tier === t.value)}>
-              <input type="radio" name="plan_tier" value={t.value}
-                checked={draft.plan_tier === t.value}
-                onChange={() => patch({ plan_tier: t.value })}
-                style={{ display: 'none' }} />
-              <span>{t.label} — {formatUsd(t.rate)}/mo</span>
-            </label>
-          ))}
+  const renderStep2 = () => {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* Plan Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+          {PLAN_TIERS.map((t) => {
+            const isSelected = draft.plan_tier === t.value;
+            return (
+              <div
+                key={t.value}
+                onClick={() => {
+                  patch({
+                    plan_tier: t.value,
+                    base_rate_cents: t.rate,
+                    included_calls: t.calls,
+                    overage_rate_cents: t.overage,
+                  });
+                }}
+                style={{
+                  padding: '1.25rem',
+                  borderRadius: '8px',
+                  border: isSelected
+                    ? '2px solid hsl(var(--primary))'
+                    : '1px solid hsl(var(--border))',
+                  background: isSelected
+                    ? 'hsl(var(--primary) / 0.08)'
+                    : 'hsl(var(--card))',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '0.25rem' }}>
+                  {t.label}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
+                  {t.quoteBased
+                    ? 'Quote-based'
+                    : `${formatUsd(t.rate)}/mo · ${t.calls} calls`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Editable Rate Inputs */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem' }}>
+          <div className="form-group">
+            <label style={labelStyle}>Base Rate (USD / Month)</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              step="0.01"
+              value={draft.base_rate_cents / 100}
+              onChange={(e) => {
+                const dollars = parseFloat(e.target.value) || 0;
+                patch({ base_rate_cents: Math.round(dollars * 100) });
+              }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={labelStyle}>Included Billable Calls / Month</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              value={draft.included_calls}
+              onChange={(e) => patch({ included_calls: parseInt(e.target.value, 10) || 0 })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={labelStyle}>Overage Rate per Call (USD)</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              step="0.01"
+              value={draft.overage_rate_cents / 100}
+              onChange={(e) => {
+                const dollars = parseFloat(e.target.value) || 0;
+                patch({ overage_rate_cents: Math.round(dollars * 100) });
+              }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={labelStyle}>One-time Onboarding Fee (USD)</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              step="0.01"
+              value={draft.integration_fees_dollars}
+              onChange={(e) =>
+                patch({
+                  integration_fees_dollars: parseFloat(e.target.value) || 0,
+                  custom_integration_required:
+                    parseFloat(e.target.value) > 0 ? true : draft.custom_integration_required,
+                })
+              }
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={labelStyle}>Billing Cadence</label>
+            <select
+              style={inputStyle}
+              value={draft.billing_cadence}
+              onChange={(e) => patch({ billing_cadence: e.target.value as BillingCadence })}
+            >
+              {BILLING_CADENCES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label style={labelStyle}>Commitment</label>
+            <select
+              style={inputStyle}
+              value={draft.commitment_months}
+              onChange={(e) => patch({ commitment_months: parseInt(e.target.value, 10) || 1 })}
+            >
+              {COMMITMENT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label style={labelStyle}>Discount</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <select
+                style={{ ...inputStyle, flex: 1 }}
+                value={
+                  [0, 5, 10, 15, 20].includes(draft.discount_percent)
+                    ? draft.discount_percent
+                    : -1
+                }
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (val >= 0) {
+                    patch({ discount_percent: val });
+                  } else {
+                    patch({ discount_percent: 10 });
+                  }
+                }}
+              >
+                {DISCOUNT_OPTIONS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+              {![0, 5, 10, 15, 20].includes(draft.discount_percent) && (
+                <input
+                  style={{ ...inputStyle, width: 90 }}
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="%"
+                  value={draft.discount_percent}
+                  onChange={(e) =>
+                    patch({
+                      discount_percent: Math.min(
+                        100,
+                        Math.max(0, parseFloat(e.target.value) || 0)
+                      ),
+                    })
+                  }
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label style={labelStyle}>Renewal Notice (Days)</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              value={draft.renewal_notice_days}
+              onChange={(e) =>
+                patch({ renewal_notice_days: parseInt(e.target.value, 10) || 30 })
+              }
+            />
+          </div>
         </div>
       </div>
-      {/* Billing Cadence */}
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Billing Cadence</label>
-        <div style={radioGroupStyle}>
-          {BILLING_CADENCES.map((c) => (
-            <label key={c.value} style={radioCardStyle(draft.billing_cadence === c.value)}>
-              <input type="radio" name="billing_cadence" value={c.value}
-                checked={draft.billing_cadence === c.value}
-                onChange={() => patch({ billing_cadence: c.value })}
-                style={{ display: 'none' }} />
-              <span>{c.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-      {/* Commitment Term */}
-      <div className="form-group" style={{ maxWidth: 320 }}>
-        <label className="form-label" style={labelStyle}>Commitment Term</label>
-        <select className="form-input" style={inputStyle}
-          value={draft.commitment_months}
-          onChange={(e) => patch({ commitment_months: parseInt(e.target.value, 10) })}>
-          {COMMITMENT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </div>
-      {/* Rates */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-        <div className="form-group">
-          <label className="form-label" style={labelStyle}>Base Monthly Rate</label>
-          <input className="form-input" style={readonlyInputStyle} readOnly
-            value={formatUsd(draft.base_rate_cents)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label" style={labelStyle}>Discount %</label>
-          <input className="form-input" style={inputStyle} type="number" min={0} max={100}
-            value={draft.discount_percent}
-            onChange={(e) => patch({ discount_percent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })} />
-        </div>
-        <div className="form-group">
-          <label className="form-label" style={labelStyle}>Net Monthly Rate</label>
-          <input className="form-input" style={readonlyInputStyle} readOnly
-            value={formatUsd(draft.net_rate_cents)} />
-        </div>
-      </div>
-      <div className="form-group" style={{ maxWidth: 320 }}>
-        <label className="form-label" style={labelStyle}>Discount Label</label>
-        <input className="form-input" style={inputStyle} placeholder='e.g. "10%, first invoice"'
-          value={draft.discount_label} onChange={(e) => patch({ discount_label: e.target.value })} />
-      </div>
-      {/* Calls */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-        <div className="form-group">
-          <label className="form-label" style={labelStyle}>Included Calls / Month</label>
-          <input className="form-input" style={inputStyle} type="number" min={0}
-            value={draft.included_calls}
-            onChange={(e) => patch({ included_calls: parseInt(e.target.value, 10) || 0 })} />
-        </div>
-        <div className="form-group">
-          <label className="form-label" style={labelStyle}>Overage Rate (cents / call)</label>
-          <input className="form-input" style={inputStyle} type="number" min={0}
-            value={draft.overage_rate_cents}
-            onChange={(e) => patch({ overage_rate_cents: parseInt(e.target.value, 10) || 0 })} />
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   /* ---- Step 3: Integrations & Support ---- */
   const renderStep3 = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div className="form-group" style={{ maxWidth: 320 }}>
-        <label className="form-label" style={labelStyle}>Integration / Setup Fees ($)</label>
-        <input className="form-input" style={inputStyle} type="number" min={0} step="0.01"
-          value={draft.integration_fees_dollars}
-          onChange={(e) => patch({ integration_fees_dollars: parseFloat(e.target.value) || 0 })} />
-      </div>
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Integration Notes</label>
-        <textarea className="form-input" style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-          value={draft.integration_notes}
-          onChange={(e) => patch({ integration_notes: e.target.value })} />
-      </div>
-      <div className="form-group">
-        <label className="form-label" style={labelStyle}>Support Tier</label>
-        <div style={radioGroupStyle}>
-          {SUPPORT_TIERS.map((t) => (
-            <label key={t.value} style={radioCardStyle(draft.support_tier === t.value)}>
-              <input type="radio" name="support_tier" value={t.value}
-                checked={draft.support_tier === t.value}
-                onChange={() => patch({ support_tier: t.value })}
-                style={{ display: 'none' }} />
-              <span>{t.label}</span>
-            </label>
-          ))}
+      {/* Custom integration checkbox */}
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem',
+          cursor: 'pointer',
+          fontWeight: 600,
+          fontSize: '0.95rem',
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={draft.custom_integration_required}
+          onChange={(e) => patch({ custom_integration_required: e.target.checked })}
+          style={{ width: 18, height: 18, accentColor: 'hsl(var(--primary))' }}
+        />
+        <span>Custom integration required</span>
+      </label>
+
+      {draft.custom_integration_required && (
+        <div
+          style={{
+            padding: '1.25rem',
+            borderRadius: '8px',
+            background: 'hsl(var(--muted) / 0.5)',
+            border: '1px solid hsl(var(--border))',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+          }}
+        >
+          <div className="form-group">
+            <label style={labelStyle}>Integration &amp; Setup Fee (USD)</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              step="0.01"
+              value={draft.integration_fees_dollars}
+              onChange={(e) =>
+                patch({ integration_fees_dollars: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label style={labelStyle}>Integration Notes / Scope</label>
+            <textarea
+              style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }}
+              value={draft.integration_notes}
+              onChange={(e) => patch({ integration_notes: e.target.value })}
+              placeholder="e.g. Zoho CRM sync, custom webhook routing, database import..."
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Support fields */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem' }}>
+        <div className="form-group">
+          <label style={labelStyle}>Support Channel</label>
+          <select
+            style={inputStyle}
+            value={draft.support_channel}
+            onChange={(e) => patch({ support_channel: e.target.value })}
+          >
+            {SUPPORT_CHANNELS.map((ch) => (
+              <option key={ch} value={ch}>
+                {ch}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label style={labelStyle}>Support Tier</label>
+          <select
+            style={inputStyle}
+            value={draft.support_tier}
+            onChange={(e) => patch({ support_tier: e.target.value as SupportTier })}
+          >
+            {SUPPORT_TIERS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label style={labelStyle}>Support Email *</label>
+          <input
+            style={inputStyle}
+            type="email"
+            value={draft.support_email}
+            onChange={(e) => patch({ support_email: e.target.value })}
+            placeholder="support@promptline.ai"
+          />
+        </div>
+
+        <div className="form-group">
+          <label style={labelStyle}>Support Hours / Time Zone</label>
+          <input
+            style={inputStyle}
+            value={draft.support_hours}
+            onChange={(e) => patch({ support_hours: e.target.value })}
+            placeholder="Mon–Fri 9am–5pm ET"
+          />
         </div>
       </div>
+
+      {/* SLA guaranteed checkbox */}
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem',
+          cursor: 'pointer',
+          fontSize: '0.9rem',
+          color: 'hsl(var(--muted-foreground))',
+          paddingTop: '0.5rem',
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={draft.sla_guaranteed}
+          onChange={(e) => patch({ sla_guaranteed: e.target.checked })}
+          style={{ width: 17, height: 17, accentColor: 'hsl(var(--primary))' }}
+        />
+        <span>Guaranteed SLA promised (requires SLA exhibit &amp; approval)</span>
+      </label>
     </div>
   );
 
-  /* ---- Step 4: Terms Preview ---- */
-  const renderStep4 = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', marginBottom: '0.5rem' }}>
-        The following terms and conditions will be included in the generated contract PDF.
-      </p>
-      <div style={{
-        background: 'hsl(var(--muted))', borderRadius: '8px', padding: '1.25rem',
-        border: '1px solid hsl(var(--border))',
-      }}>
-        {TC_CLAUSES.map((clause) => (
-          <div key={clause} style={{
-            padding: '0.5rem 0', borderBottom: '1px solid hsl(var(--border))',
-            fontSize: '0.9rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem',
-          }}>
-            <FiFileText style={{ color: 'hsl(var(--primary))', flexShrink: 0 }} />
-            {clause}
+  /* ---- Step 4: Terms (Full Editable Clauses Editor) ---- */
+  const renderStep4 = () => {
+    const handleResetTerms = () => {
+      if (
+        window.confirm(
+          'This will restore all 13 standard clauses to their default templates. Any custom edits to clauses will be reset. Proceed?'
+        )
+      ) {
+        patch({
+          terms_clauses: DEFAULT_TERMS_CLAUSES.map((c) => ({ ...c })),
+        });
+        toast('Terms reset to standard template');
+      }
+    };
+
+    const handleUpdateClause = (index: number, field: 'title' | 'body', value: string) => {
+      const updated = [...draft.terms_clauses];
+      updated[index] = { ...updated[index], [field]: value };
+      patch({ terms_clauses: updated });
+    };
+
+    const handleDeleteClause = (index: number) => {
+      if (draft.terms_clauses.length <= 1) {
+        toast('Contract must have at least one clause', 'error');
+        return;
+      }
+      const updated = draft.terms_clauses.filter((_, i) => i !== index);
+      patch({ terms_clauses: updated });
+    };
+
+    const handleAddClause = () => {
+      const newClause: ContractClause = {
+        id: `c_${Date.now()}`,
+        title: 'New Clause',
+        body: 'Terms and conditions for this section.',
+      };
+      patch({ terms_clauses: [...draft.terms_clauses, newClause] });
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        {/* Header bar */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingBottom: '0.75rem',
+            borderBottom: '1px solid hsl(var(--border))',
+          }}
+        >
+          <div>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                color: 'hsl(var(--muted-foreground))',
+                textTransform: 'uppercase',
+              }}
+            >
+              Terms and Conditions — Template V1.0
+            </span>
           </div>
-        ))}
-      </div>
-      <p style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))', fontStyle: 'italic' }}>
-        Full terms will be included in the generated PDF.
-      </p>
-    </div>
-  );
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={handleResetTerms}
+            style={{
+              padding: '0.4rem 0.85rem',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+            }}
+          >
+            <FiRotateCcw size={14} />
+            <span>Reset to template</span>
+          </button>
+        </div>
 
-  /* ---- Step 5: Contract Preview ---- */
+        <p style={{ fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))', lineHeight: 1.45 }}>
+          Words in <code style={{ color: 'hsl(var(--primary))' }}>{'{braces}'}</code> are filled in
+          automatically from the contract (e.g.{' '}
+          <code>{'{customer}'}</code>, <code>{'{plan}'}</code>, <code>{'{calls}'}</code>,{' '}
+          <code>{'{overage}'}</code>, <code>{'{term}'}</code>). Edits to standard clauses should be
+          reviewed by legal.
+        </p>
+
+        {/* List of clause cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {draft.terms_clauses.map((clause, idx) => {
+            const previewText = interpolateClause(clause.body, draft);
+            return (
+              <div
+                key={clause.id || idx}
+                style={{
+                  borderRadius: '8px',
+                  border: '1px solid hsl(var(--border))',
+                  background: 'hsl(var(--card))',
+                  padding: '1.1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                }}
+              >
+                {/* Clause Header Row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span
+                    style={{
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      color: 'hsl(var(--muted-foreground))',
+                      width: 24,
+                    }}
+                  >
+                    {idx + 1}.
+                  </span>
+                  <input
+                    style={{
+                      ...inputStyle,
+                      fontWeight: 700,
+                      fontSize: '0.92rem',
+                      flex: 1,
+                    }}
+                    value={clause.title}
+                    onChange={(e) => handleUpdateClause(idx, 'title', e.target.value)}
+                    placeholder="Clause Title"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteClause(idx)}
+                    title="Remove clause"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'hsl(var(--muted-foreground))',
+                      cursor: 'pointer',
+                      padding: '0.35rem',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.color = 'hsl(var(--muted-foreground))')
+                    }
+                  >
+                    <FiX size={18} />
+                  </button>
+                </div>
+
+                {/* Clause Body Textarea */}
+                <textarea
+                  style={{
+                    ...inputStyle,
+                    minHeight: 80,
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    lineHeight: 1.5,
+                    fontSize: '0.85rem',
+                  }}
+                  value={clause.body}
+                  onChange={(e) => handleUpdateClause(idx, 'body', e.target.value)}
+                  placeholder="Enter clause body template..."
+                />
+
+                {/* Live Preview Strip */}
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: 'hsl(var(--muted-foreground))',
+                    background: 'hsl(var(--muted) / 0.5)',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: '6px',
+                    lineHeight: 1.45,
+                    borderLeft: '3px solid hsl(var(--primary))',
+                  }}
+                >
+                  <strong style={{ color: 'hsl(var(--foreground))' }}>Preview: </strong>
+                  {previewText}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Add clause button */}
+        <button
+          type="button"
+          className="btn btn--secondary"
+          onClick={handleAddClause}
+          style={{
+            alignSelf: 'flex-start',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.6rem 1.25rem',
+          }}
+        >
+          <FiPlus />
+          <span>Add Clause</span>
+        </button>
+      </div>
+    );
+  };
+
+  /* ---- Step 5: Interactive Contract Preview ---- */
   const renderStep5 = () => {
-    const tierLabel = PLAN_TIERS.find((t) => t.value === draft.plan_tier)?.label ?? draft.plan_tier;
+    const tierLabel =
+      PLAN_TIERS.find((t) => t.value === draft.plan_tier)?.label ?? draft.plan_tier;
+
+    const overageExcess = Math.max(0, previewTestCalls - draft.included_calls);
+    const overageAmount = (overageExcess * draft.overage_rate_cents) / 100;
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {/* Parties */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem',
-        }}>
-          <div style={{
-            background: 'hsl(var(--muted))', borderRadius: '8px', padding: '1.25rem',
+        {/* Customer Header summary (collapsible) */}
+        <div
+          style={{
+            background: 'hsl(var(--card))',
+            borderRadius: '8px',
             border: '1px solid hsl(var(--border))',
-          }}>
-            <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', marginBottom: '0.75rem' }}>Provider</h4>
-            <p style={{ fontWeight: 600 }}>PromptLine AI, Inc.</p>
-            <p className="text-muted" style={{ fontSize: '0.85rem' }}>Service Provider</p>
+            padding: '1rem 1.25rem',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+            }}
+            onClick={() => setCustomerExpanded(!customerExpanded)}
+          >
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>
+              Customer: {draft.legal_business_name || 'Not specified'}
+            </h4>
+            {customerExpanded ? <FiChevronUp /> : <FiChevronDown />}
           </div>
-          <div style={{
-            background: 'hsl(var(--muted))', borderRadius: '8px', padding: '1.25rem',
-            border: '1px solid hsl(var(--border))',
-          }}>
-            <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', marginBottom: '0.75rem' }}>Customer</h4>
-            <p style={{ fontWeight: 600 }}>{draft.legal_business_name}</p>
-            {draft.dba_name && <p className="text-muted" style={{ fontSize: '0.85rem' }}>DBA: {draft.dba_name}</p>}
-            {draft.billing_address && <p className="text-muted" style={{ fontSize: '0.85rem' }}>{draft.billing_address}</p>}
-            {(draft.state || draft.country) && (
-              <p className="text-muted" style={{ fontSize: '0.85rem' }}>{[draft.state, draft.country].filter(Boolean).join(', ')}</p>
-            )}
-          </div>
+
+          {customerExpanded && (
+            <div
+              style={{
+                marginTop: '0.75rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid hsl(var(--border))',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '0.5rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div>
+                <span className="text-muted">Signer: </span>
+                <span>
+                  {draft.authorized_signer_name} ({draft.authorized_signer_title})
+                </span>
+              </div>
+              <div>
+                <span className="text-muted">Signer Email: </span>
+                <span>{draft.authorized_signer_email}</span>
+              </div>
+              <div>
+                <span className="text-muted">Billing Address: </span>
+                <span>
+                  {[draft.billing_address, draft.state, draft.country]
+                    .filter(Boolean)
+                    .join(', ')}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted">Service Start Date: </span>
+                <span>{draft.service_start_date}</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Order Summary */}
-        <div style={{
-          background: 'hsl(var(--card))', borderRadius: '8px', padding: '1.25rem',
-          border: '1px solid hsl(var(--border))',
-        }}>
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '1rem' }}>Order Summary</h4>
+        {/* Order Summary Table */}
+        <div
+          style={{
+            background: 'hsl(var(--card))',
+            borderRadius: '8px',
+            border: '1px solid hsl(var(--border))',
+            overflow: 'hidden',
+          }}
+        >
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
             <tbody>
               {[
-                ['Agreement #', draft.agreement_number],
-                ['Plan Tier', tierLabel],
-                ['Base Rate', `${formatUsd(draft.base_rate_cents)}/mo`],
-                ['Discount', `${draft.discount_percent}%${draft.discount_label ? ` — ${draft.discount_label}` : ''}`],
-                ['Net Monthly Rate', `${formatUsd(draft.net_rate_cents)}/mo`],
-                ['Billing Cadence', draft.billing_cadence === 'monthly' ? 'Monthly' : 'Annual (Prepaid)'],
-                ['Commitment', `${draft.commitment_months} month${draft.commitment_months !== 1 ? 's' : ''}`],
-                ['Included Calls', `${draft.included_calls}/mo`],
-                ['Overage Rate', `${formatUsd(draft.overage_rate_cents)}/call`],
-                ['Setup / Integration Fees', formatUsd(Math.round(draft.integration_fees_dollars * 100))],
-                ['Support Tier', draft.support_tier.charAt(0).toUpperCase() + draft.support_tier.slice(1)],
-              ].map(([label, value]) => (
-                <tr key={label as string} style={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                  <td style={{ padding: '0.5rem 0.5rem 0.5rem 0', color: 'hsl(var(--muted-foreground))' }}>{label}</td>
-                  <td style={{ padding: '0.5rem 0', fontWeight: 600, textAlign: 'right' }}>{value}</td>
+                ['Plan', `${tierLabel} · ${draft.billing_cadence === 'monthly' ? 'Monthly' : 'Annual'}`],
+                ['Base rate', `${formatUsd(draft.base_rate_cents)}/mo`],
+                [
+                  'Net subscription',
+                  `${formatUsd(draft.net_rate_cents)}/mo${draft.discount_percent > 0 ? ` (${draft.discount_percent}% off)` : ''}`,
+                ],
+                ['Recurring monthly', `${formatUsd(draft.net_rate_cents)}/mo`],
+                ['Included calls', `${draft.included_calls}/mo`],
+                ['Overage', `${formatUsd(draft.overage_rate_cents)}/call`],
+                ['One-time fees', formatUsd(Math.round(draft.integration_fees_dollars * 100))],
+                ['Projected first invoice', formatUsd(projectedInvoice)],
+              ].map(([label, value], i, arr) => (
+                <tr
+                  key={label as string}
+                  style={{
+                    borderBottom: i < arr.length - 1 ? '1px solid hsl(var(--border))' : 'none',
+                    fontWeight: i === 3 || i === 7 ? 700 : 500,
+                    background:
+                      i === 7 ? 'hsl(var(--primary) / 0.08)' : i % 2 === 0 ? 'transparent' : 'hsl(var(--muted) / 0.25)',
+                  }}
+                >
+                  <td style={{ padding: '0.65rem 1rem', color: i === 7 ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))' }}>
+                    {label}
+                  </td>
+                  <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{value}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* Key Dates */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div style={{
-            background: 'hsl(var(--muted))', borderRadius: '8px', padding: '1rem',
+        {/* Overage Example with Interactive Test Input */}
+        <div
+          style={{
+            background: 'hsl(var(--card))',
+            borderRadius: '8px',
             border: '1px solid hsl(var(--border))',
-          }}>
-            <span className="text-muted" style={{ fontSize: '0.8rem' }}>Agreement Date</span>
-            <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>{draft.agreement_date}</p>
-          </div>
-          <div style={{
-            background: 'hsl(var(--muted))', borderRadius: '8px', padding: '1rem',
-            border: '1px solid hsl(var(--border))',
-          }}>
-            <span className="text-muted" style={{ fontSize: '0.8rem' }}>Service Start Date</span>
-            <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>{draft.service_start_date}</p>
+            padding: '1.25rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+          }}
+        >
+          <label style={labelStyle}>Overage Example — Billable Calls in a Month</label>
+          <input
+            style={{ ...inputStyle, maxWidth: 220, fontWeight: 700, fontSize: '1.05rem' }}
+            type="number"
+            min={0}
+            value={previewTestCalls}
+            onChange={(e) => setPreviewTestCalls(parseInt(e.target.value, 10) || 0)}
+          />
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '6px',
+              background: 'hsl(var(--muted) / 0.5)',
+              fontSize: '0.85rem',
+              lineHeight: 1.5,
+            }}
+          >
+            Allowance {draft.included_calls}, usage {previewTestCalls} &rArr;{' '}
+            {overageExcess} &times; {formatUsd(draft.overage_rate_cents)} ={' '}
+            <strong>${overageAmount.toFixed(2)}</strong> overage. Usage charges are variable and
+            never part of a fixed total.
           </div>
         </div>
 
-        <p style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))', fontStyle: 'italic' }}>
-          Generate the PDF to see the full contract with terms &amp; conditions.
-        </p>
+        {/* Invoice Schedule */}
+        <div
+          style={{
+            background: 'hsl(var(--card))',
+            borderRadius: '8px',
+            border: '1px solid hsl(var(--border))',
+            padding: '1.25rem',
+          }}
+        >
+          <label style={labelStyle}>Invoice Schedule</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <div style={sidebarRowStyle}>
+              <span>Month 1 (includes one-time onboarding fee)</span>
+              <strong>{formatUsd(projectedInvoice)}</strong>
+            </div>
+            <div style={sidebarRowStyle}>
+              <span>Month 2</span>
+              <span>{formatUsd(draft.net_rate_cents)}</span>
+            </div>
+            <div style={{ ...sidebarRowStyle, borderBottom: 'none' }}>
+              <span>Month 3</span>
+              <span>{formatUsd(draft.net_rate_cents)}</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
 
   /* ---- Step 6: Generate ---- */
   const renderStep6 = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', padding: '2rem 0' }}>
-      <FiFileText style={{ fontSize: '3rem', color: 'hsl(var(--primary))' }} />
-      <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '1.5rem',
+        padding: '2.5rem 0',
+      }}
+    >
+      <FiFileText style={{ fontSize: '3.5rem', color: 'hsl(var(--primary))' }} />
+      <h3 style={{ fontSize: '1.35rem', fontWeight: 700 }}>
         {generated ? 'Contract Generated Successfully!' : 'Ready to Generate Contract'}
       </h3>
-      <p className="text-muted" style={{ textAlign: 'center', maxWidth: 480 }}>
+      <p className="text-muted" style={{ textAlign: 'center', maxWidth: 480, lineHeight: 1.5 }}>
         {generated
-          ? 'Your contract PDF has been saved and downloaded. You can find it in the contract history below.'
-          : 'This will save the contract details, generate a PDF, upload it to storage, and download it to your browser.'}
+          ? 'Your contract PDF has been saved and downloaded. You can view or download it anytime from the contract history table.'
+          : 'This will compile all customer details, pricing terms, and customized clauses into a PromptLine branded PDF, save it to storage, and download it.'}
       </p>
       {!generated && (
-        <button className="btn btn--primary" onClick={handleGenerate} disabled={generating}
-          style={{ padding: '0.75rem 2rem', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <button
+          className="btn btn--primary"
+          onClick={handleGenerate}
+          disabled={generating}
+          style={{
+            padding: '0.85rem 2.25rem',
+            fontSize: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontWeight: 600,
+          }}
+        >
           {generating ? <FiRefreshCw style={{ animation: 'spin 1s linear infinite' }} /> : <FiDownload />}
-          {generating ? 'Generating…' : 'Generate PDF'}
+          {generating ? 'Generating PDF…' : 'Generate PDF'}
         </button>
       )}
       {generated && (
-        <button className="btn btn--secondary" onClick={() => { setWizardMode(false); setGenerated(false); }}
-          style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
+        <button
+          className="btn btn--secondary"
+          onClick={() => {
+            setWizardMode(false);
+            setGenerated(false);
+          }}
+          style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}
+        >
           View Contract History
         </button>
       )}
     </div>
   );
 
-  /* ---- Wizard renderer ---- */
-  const renderWizard = () => {
-    const stepRenderers = [renderStep1, renderStep2, renderStep3, renderStep4, renderStep5, renderStep6];
+  /* ---- Live Summary Sidebar (Visible on Steps 0-4) ---- */
+  const renderSidebar = () => {
+    const tierLabel =
+      PLAN_TIERS.find((t) => t.value === draft.plan_tier)?.label ?? draft.plan_tier;
+    const issueCount = validationIssues.length;
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {renderStepIndicators()}
+      <div
+        style={{
+          width: 290,
+          background: 'hsl(var(--card))',
+          borderRadius: '8px',
+          border: '1px solid hsl(var(--border))',
+          padding: '1.25rem',
+          flexShrink: 0,
+          position: 'sticky',
+          top: '1.5rem',
+        }}
+      >
+        <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem' }}>Live summary</h4>
+        <div style={sidebarRowStyle}>
+          <span className="text-muted">Plan</span>
+          <span style={{ fontWeight: 600 }}>
+            {tierLabel} · {draft.billing_cadence === 'monthly' ? 'Monthly' : 'Annual'}
+          </span>
+        </div>
+        <div style={sidebarRowStyle}>
+          <span className="text-muted">Base rate</span>
+          <span>{formatUsd(draft.base_rate_cents)}/mo</span>
+        </div>
+        <div style={sidebarRowStyle}>
+          <span className="text-muted">Net subscription</span>
+          <span>{formatUsd(draft.net_rate_cents)}/mo</span>
+        </div>
+        <div style={{ ...sidebarRowStyle, fontWeight: 700 }}>
+          <span>Recurring monthly</span>
+          <span>{formatUsd(draft.net_rate_cents)}/mo</span>
+        </div>
+        <div style={sidebarRowStyle}>
+          <span className="text-muted">Included calls</span>
+          <span>{draft.included_calls.toLocaleString('en-US')}/mo</span>
+        </div>
+        <div style={sidebarRowStyle}>
+          <span className="text-muted">Overage</span>
+          <span>{formatUsd(draft.overage_rate_cents)}/call</span>
+        </div>
+        <div style={sidebarRowStyle}>
+          <span className="text-muted">One-time fees</span>
+          <span>{formatUsd(Math.round(draft.integration_fees_dollars * 100))}</span>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: '0.75rem 0 0',
+            marginTop: '0.5rem',
+            borderTop: '2px solid hsl(var(--primary))',
+            fontWeight: 700,
+            fontSize: '0.95rem',
+          }}
+        >
+          <span>Projected first invoice</span>
+          <span style={{ color: 'hsl(var(--primary))' }}>{formatUsd(projectedInvoice)}</span>
+        </div>
+
+        {/* Validation issues counter */}
+        <div
+          style={{
+            marginTop: '1.25rem',
+            padding: '0.6rem 0.75rem',
+            borderRadius: '6px',
+            fontSize: '0.78rem',
+            background:
+              issueCount === 0
+                ? 'hsl(142 76% 36% / 0.12)'
+                : 'hsl(var(--muted) / 0.6)',
+            color:
+              issueCount === 0
+                ? 'hsl(142 76% 36%)'
+                : 'hsl(var(--muted-foreground))',
+            fontWeight: 600,
+            textAlign: 'center',
+          }}
+        >
+          {issueCount === 0
+            ? '✓ All required fields complete'
+            : `${issueCount} open issue${issueCount !== 1 ? 's' : ''} · 0 approval flags`}
+        </div>
+      </div>
+    );
+  };
+
+  /* ---- Wizard step top pill navigation ---- */
+  const renderStepPills = () => (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '0.5rem',
+        marginBottom: '1.5rem',
+      }}
+    >
+      {WIZARD_STEPS.map((label, idx) => {
+        const isActive = idx === step;
+        const isPast = idx < step;
+        return (
+          <button
+            key={label}
+            type="button"
+            onClick={() => {
+              if (idx <= step) setStep(idx);
+            }}
+            style={{
+              padding: '0.45rem 1rem',
+              borderRadius: '20px',
+              border: isActive
+                ? '2px solid hsl(var(--primary))'
+                : isPast
+                  ? '1px solid hsl(var(--border))'
+                  : '1px solid hsl(var(--border))',
+              background: isActive
+                ? 'hsl(var(--primary))'
+                : isPast
+                  ? 'hsl(var(--muted) / 0.5)'
+                  : 'transparent',
+              color: isActive
+                ? '#fff'
+                : isPast
+                  ? 'hsl(var(--foreground))'
+                  : 'hsl(var(--muted-foreground))',
+              fontWeight: isActive ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: idx <= step ? 'pointer' : 'default',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  /* ---- Main Wizard Renderer ---- */
+  const renderWizard = () => {
+    const stepRenderers = [
+      renderStep1,
+      renderStep2,
+      renderStep3,
+      renderStep4,
+      renderStep5,
+      renderStep6,
+    ];
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        {renderStepPills()}
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
-          {/* Main form area */}
+          {/* Main content form */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="page-card" style={{ padding: '1.5rem' }}>
-              <div className="page-card__header" style={{ marginBottom: '1.25rem' }}>
-                <h3 className="page-card__title">{WIZARD_STEPS[step]}</h3>
+            <div className="page-card" style={{ padding: '1.75rem' }}>
+              <div className="page-card__header" style={{ marginBottom: '1.5rem' }}>
+                <h3 className="page-card__title" style={{ fontSize: '1.35rem' }}>
+                  {WIZARD_STEPS[step].replace(/^\d+\.\s*/, '')}
+                </h3>
               </div>
+
               {stepRenderers[step]()}
-              {/* Navigation */}
+
+              {/* Navigation buttons */}
               {step < 5 && (
-                <div style={{
-                  display: 'flex', justifyContent: step === 0 ? 'flex-end' : 'space-between',
-                  marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid hsl(var(--border))',
-                }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: step === 0 ? 'flex-end' : 'space-between',
+                    marginTop: '2rem',
+                    paddingTop: '1.25rem',
+                    borderTop: '1px solid hsl(var(--border))',
+                  }}
+                >
                   {step > 0 && (
                     <button className="btn btn--secondary" onClick={handleBack}>
                       Back
                     </button>
                   )}
                   <button className="btn btn--primary" onClick={handleNext}>
-                    Next
+                    Continue
                   </button>
                 </div>
               )}
+
               {step === 5 && !generated && (
-                <div style={{
-                  display: 'flex', justifyContent: 'flex-start',
-                  marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid hsl(var(--border))',
-                }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-start',
+                    marginTop: '2rem',
+                    paddingTop: '1.25rem',
+                    borderTop: '1px solid hsl(var(--border))',
+                  }}
+                >
                   <button className="btn btn--secondary" onClick={handleBack}>
                     Back
                   </button>
@@ -951,166 +1892,134 @@ export const BusinessContractPage = () => {
               )}
             </div>
           </div>
-          {/* Sidebar */}
-          {renderSidebar()}
+
+          {/* Right Live Summary Sidebar (Steps 0-4) */}
+          {step < 5 && renderSidebar()}
         </div>
       </div>
     );
   };
 
-  /* ---- Contract history table columns ---- */
-  const contractColumns: ColumnDef<TenantContract>[] = [
+  /* ================================================================ */
+  /*  CONTRACT HISTORY VIEW                                           */
+  /* ================================================================ */
+
+  const columns: ColumnDef<TenantContract>[] = [
     {
-      header: 'Agreement #',
       id: 'agreement_number',
-      cell: (row) => <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{row.agreement_number}</span>,
+      header: 'Agreement #',
+      cell: (row) => <strong>{row.agreement_number}</strong>,
     },
     {
-      header: 'Status',
+      id: 'plan_tier',
+      header: 'Plan',
+      cell: (row) => (
+        <span style={{ textTransform: 'capitalize' }}>
+          {row.plan_tier} · {row.billing_cadence}
+        </span>
+      ),
+    },
+    {
+      id: 'net_rate_cents',
+      header: 'Rate',
+      cell: (row) => `${formatUsd(row.net_rate_cents)}/mo`,
+    },
+    {
+      id: 'commitment_months',
+      header: 'Term',
+      cell: (row) =>
+        row.commitment_months > 1 ? `${row.commitment_months} mo` : 'Month-to-month',
+    },
+    {
       id: 'status',
+      header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />,
     },
     {
-      header: 'Plan',
-      id: 'plan_tier',
-      cell: (row) => <span style={{ textTransform: 'capitalize' }}>{row.plan_tier}</span>,
-    },
-    {
-      header: 'Net Rate',
-      id: 'net_rate_cents',
-      cell: (row) => <span style={{ fontWeight: 600 }}>{formatUsd(row.net_rate_cents)}/mo</span>,
-    },
-    {
-      header: 'Agreement Date',
-      id: 'agreement_date',
-      cell: (row) => row.agreement_date,
-    },
-    {
-      header: 'Created',
       id: 'created_at',
-      cell: (row) => new Date(row.created_at).toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
+      header: 'Date',
+      cell: (row) => new Date(row.created_at).toLocaleDateString(),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: (row) => (
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {row.pdf_storage_path && (
+            <button
+              className="btn btn--secondary btn--sm"
+              onClick={() => handleDownloadPdf(row)}
+              title="Download PDF"
+            >
+              <FiDownload /> PDF
+            </button>
+          )}
+          <button
+            className="btn btn--secondary btn--sm"
+            onClick={() => handleRegenerate(row)}
+            title="Edit / Regenerate"
+          >
+            <FiRefreshCw />
+          </button>
+        </div>
+      ),
     },
   ];
 
-  /* ---- Latest contract card ---- */
-  const renderLatestContract = () => {
-    if (!latestContract) return null;
-    const tierLabel = PLAN_TIERS.find((t) => t.value === latestContract.plan_tier)?.label ?? latestContract.plan_tier;
-    return (
-      <div className="page-card" style={{ marginBottom: '1.5rem' }}>
-        <div className="page-card__header">
-          <h3 className="page-card__title">Latest Contract</h3>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {latestContract.pdf_storage_path && (
-              <button className="btn btn--secondary btn--sm" onClick={() => handleDownloadPdf(latestContract)}>
-                <FiDownload /> Download PDF
-              </button>
-            )}
-            <button className="btn btn--secondary btn--sm" onClick={() => handleRegenerate(latestContract)}>
-              <FiRefreshCw /> Regenerate
-            </button>
-            <button className="btn btn--primary btn--sm" onClick={openWizard}>
-              <FiPlus /> Create New Version
-            </button>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-          <div>
-            <span className="text-muted" style={{ fontSize: '0.75rem', textTransform: 'uppercase', display: 'block', marginBottom: '0.25rem' }}>Agreement #</span>
-            <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{latestContract.agreement_number}</span>
-          </div>
-          <div>
-            <span className="text-muted" style={{ fontSize: '0.75rem', textTransform: 'uppercase', display: 'block', marginBottom: '0.25rem' }}>Status</span>
-            <StatusBadge status={latestContract.status} />
-          </div>
-          <div>
-            <span className="text-muted" style={{ fontSize: '0.75rem', textTransform: 'uppercase', display: 'block', marginBottom: '0.25rem' }}>Plan &amp; Rate</span>
-            <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{tierLabel} — {formatUsd(latestContract.net_rate_cents)}/mo</span>
-          </div>
-          <div>
-            <span className="text-muted" style={{ fontSize: '0.75rem', textTransform: 'uppercase', display: 'block', marginBottom: '0.25rem' }}>Agreement Date</span>
-            <span style={{ fontWeight: 600 }}>{latestContract.agreement_date}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  /* ---- View mode (contracts exist) ---- */
-  const renderViewMode = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {renderLatestContract()}
-      <div className="page-card">
-        <div className="page-card__header">
-          <h3 className="page-card__title">Contract History</h3>
-        </div>
-        {contracts.length === 0 ? (
-          <div className="empty-state" style={{ padding: '2rem 1rem' }}>
-            <p className="empty-state__text">No contracts found for this business.</p>
-          </div>
-        ) : (
-          <DataTable data={contracts} columns={contractColumns} />
-        )}
-      </div>
-    </div>
-  );
-
-  /* ---- Empty state (no contracts) ---- */
-  const renderEmptyState = () => (
-    <div className="page-card">
-      <div className="empty-state" style={{ padding: '3rem 1rem', textAlign: 'center' }}>
-        <FiFileText style={{ fontSize: '2.5rem', color: 'hsl(var(--muted-foreground))', marginBottom: '1rem' }} />
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>No Contract Yet</h3>
-        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
-          Create a contract for this business to define plan terms, billing, and conditions.
-        </p>
-        <button className="btn btn--primary" onClick={openWizard} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-          <FiPlus /> Create Contract
-        </button>
-      </div>
-    </div>
-  );
-
-  /* ================================================================ */
-  /*  Main Return                                                     */
-  /* ================================================================ */
+  if (!id) return null;
 
   return (
-    <div className="page-content">
-      <button
-        className="btn btn--ghost"
-        style={{ padding: 0, marginBottom: '1rem', color: 'hsl(var(--muted-foreground))' }}
-        onClick={() => navigate('/businesses')}
-      >
-        <FiArrowLeft /> Back to Businesses
-      </button>
-
-      <PageHeader
-        title="Contract"
-        subtitle={`Contract management for Tenant ID: ${id}`}
-      />
-
-      {id && <BusinessTabs tenantId={id} />}
-
-      <div className="dashboard-section">
-        {loading ? (
-          <p>Loading contracts...</p>
-        ) : wizardMode ? (
-          renderWizard()
-        ) : contracts.length > 0 ? (
-          renderViewMode()
+    <BusinessSubLayout tenantId={id}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Contract</h2>
+          <p className="text-muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
+            Contract management and PDF generation for this business
+          </p>
+        </div>
+        {!wizardMode ? (
+          <button className="btn btn--primary" onClick={openWizard}>
+            <FiPlus /> New Contract
+          </button>
         ) : (
-          renderEmptyState()
+          <button
+            className="btn btn--secondary"
+            onClick={() => {
+              setWizardMode(false);
+              setGenerated(false);
+            }}
+          >
+            <FiArrowLeft /> Exit Wizard
+          </button>
         )}
       </div>
 
-      {/* Spin animation for the generating spinner */}
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+      {wizardMode && renderWizard()}
+
+      {!wizardMode && (
+        <div className="page-card">
+          <div className="page-card__header">
+            <h3 className="page-card__title">Contract History</h3>
+          </div>
+          {loading ? (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <FiRefreshCw style={{ animation: 'spin 1s linear infinite' }} />
+            </div>
+          ) : contracts.length === 0 ? (
+            <div style={{ padding: '3rem 2rem', textAlign: 'center' }}>
+              <FiFileText style={{ fontSize: '2.5rem', opacity: 0.4, marginBottom: '0.75rem' }} />
+              <p className="text-muted" style={{ marginBottom: '1rem' }}>
+                No contracts generated yet for this business.
+              </p>
+              <button className="btn btn--primary" onClick={openWizard}>
+                <FiPlus /> Generate First Contract
+              </button>
+            </div>
+          ) : (
+            <DataTable columns={columns} data={contracts} />
+          )}
+        </div>
+      )}
+    </BusinessSubLayout>
   );
 };

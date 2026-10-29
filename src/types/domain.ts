@@ -281,6 +281,12 @@ export type ContractStatus = 'draft' | 'generated' | 'sent' | 'signed' | 'expire
 export type BillingCadence = 'monthly' | 'annual_prepaid';
 export type SupportTier = 'standard' | 'priority' | 'dedicated';
 
+export type ContractClause = {
+  id?: string;
+  title: string;
+  body: string;
+};
+
 export type TenantContract = {
   id: string;
   tenant_id: string;
@@ -310,11 +316,20 @@ export type TenantContract = {
   net_rate_cents: number;
   included_calls: number;
   overage_rate_cents: number;
+  renewal_notice_days?: number;
 
   // Integrations & Add-ons
+  custom_integration_required?: boolean;
   integration_fees_cents: number;
   integration_notes: string | null;
   support_tier: SupportTier;
+  support_channel?: string;
+  support_email?: string | null;
+  support_hours?: string;
+  sla_guaranteed?: boolean;
+
+  // Terms & Conditions (editable clauses)
+  terms_clauses?: ContractClause[] | null;
 
   // Dates
   agreement_date: string;
