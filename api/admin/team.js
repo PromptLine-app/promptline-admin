@@ -18,7 +18,7 @@ import { getAdminClient, requireAdmin } from "../_lib/adminAuth.js";
 
 export default async function handler(req, res) {
   try {
-    await requireAdmin(req); // role 'admin' required
+    const { adminUser } = await requireAdmin(req); // role 'admin' required
 
     const admin = getAdminClient();
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
@@ -57,12 +57,60 @@ export default async function handler(req, res) {
 
     if (req.method === "DELETE") {
       const { id, authUserId } = body;
-      if (!id || !authUserId) return res.status(400).json({ error: "Missing id or authUserId" });
+      if (!id) return res.status(400).json({ error: "Missing member ID" });
 
+      if (adminUser?.id && id === adminUser.id) {
+        return res.status(400).json({ error: "You cannot remove your own admin account." });
+      }
+
+      let targetAuthId = authUserId;
+      if (!targetAuthId) {
+        const { data: existingUser } = await admin
+          .from("admin_users")
+          .select("auth_user_id")
+          .eq("id", id)
+          .maybeSingle();
+        targetAuthId = existingUser?.auth_user_id;
+      }
+
+      // Step 1: Clean up admin_activity_log foreign key constraint.
+      // Try setting admin_user_id to null first (if schema allows null, preserving audit trail).
+      const { error: nullifyErr } = await admin
+        .from("admin_activity_log")
+        .update({ admin_user_id: null })
+        .eq("admin_user_id", id);
+
+      // If the column has a NOT NULL constraint, delete the dependent logs so deletion can proceed
+      if (nullifyErr) {
+        const { error: delLogsErr } = await admin
+          .from("admin_activity_log")
+          .delete()
+          .eq("admin_user_id", id);
+        if (delLogsErr) {
+          console.warn("Could not clean up admin_activity_log for user:", delLogsErr.message);
+        }
+      }
+
+      // Step 2: Unlink any notes written by this admin
+      await admin.from("tenant_notes").update({ admin_user_id: null }).eq("admin_user_id", id);
+
+      // Step 3: Remove the admin_users record
       const { error: dbErr } = await admin.from("admin_users").delete().eq("id", id);
       if (dbErr) throw dbErr;
-      await admin.auth.admin.deleteUser(authUserId);
-      await admin.from("users").delete().eq("user_auth_id", authUserId);
+
+      // Step 4: Remove the Supabase Auth user and public.users row
+      if (targetAuthId) {
+        try {
+          await admin.auth.admin.deleteUser(targetAuthId);
+        } catch (authErr) {
+          console.warn("Could not delete auth user:", authErr?.message || authErr);
+        }
+        try {
+          await admin.from("users").delete().eq("user_auth_id", targetAuthId);
+        } catch (userErr) {
+          console.warn("Could not delete public.users record:", userErr?.message || userErr);
+        }
+      }
 
       return res.status(200).json({ ok: true });
     }
