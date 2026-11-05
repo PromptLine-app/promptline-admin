@@ -44,34 +44,22 @@ export const ResetPasswordPage = () => {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card" style={{ maxWidth: '400px' }}>
-        <div className="login-header">
-          <div className="login-logo">
-            <svg width="40" height="40" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M50 10C27.9086 10 10 27.9086 10 50C10 61.0457 14.4772 71.0457 21.7157 78.2843C28.9543 85.5228 38.9543 90 50 90C72.0914 90 90 72.0914 90 50C90 27.9086 72.0914 10 50 10Z" fill="url(#paint0_linear)"/>
-              <path d="M30 50L45 65L75 35" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
-              <defs>
-                <linearGradient id="paint0_linear" x1="10" y1="10" x2="90" y2="90" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#0066FF"/>
-                  <stop offset="1" stopColor="#00E5FF"/>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <h2>Reset Password</h2>
-          <p className="text-muted">Enter your new password below.</p>
-        </div>
+    <div className="login-page">
+      <div className="login-card">
+        <img src="/logo.png" alt="PromptLine Admin" className="login-card__logo" />
+        <h1>Reset Password</h1>
+        <p className="login-card__subtitle">Enter your new password below</p>
 
         {success ? (
-          <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-            <FiCheck size={48} color="var(--success)" style={{ marginBottom: '1rem' }} />
-            <p style={{ fontWeight: 600 }}>Password updated successfully!</p>
+          <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+            <FiCheck size={48} color="hsl(var(--success))" style={{ marginBottom: '1rem' }} />
+            <p style={{ fontWeight: 600, color: 'hsl(var(--success))' }}>Password updated successfully!</p>
             <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>Redirecting to dashboard...</p>
           </div>
         ) : (
-          <form className="login-form" onSubmit={handleReset}>
-            {error && <div className="login-error">{error}</div>}
+          <form className="login-card__form" onSubmit={handleReset}>
+            {error && <div className="login-card__error">{error}</div>}
+            
             <div className="form-group">
               <label className="form-label">New Password</label>
               <input
@@ -81,8 +69,13 @@ export const ResetPasswordPage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={6}
               />
+              <small className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
+                Must be at least 6 characters.
+              </small>
             </div>
+
             <div className="form-group">
               <label className="form-label">Confirm Password</label>
               <input
@@ -92,11 +85,22 @@ export const ResetPasswordPage = () => {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                minLength={6}
               />
             </div>
-            <button type="submit" className="btn btn--primary" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
+
+            <button type="submit" className="btn btn--primary" style={{ width: '100%', marginTop: '0.5rem' }} disabled={loading}>
               <FiLock style={{ marginRight: '0.5rem' }} />
               {loading ? 'Updating...' : 'Update Password'}
+            </button>
+
+            <button 
+              type="button" 
+              className="btn btn--ghost" 
+              style={{ width: '100%', marginTop: '0.25rem' }} 
+              onClick={() => navigate('/login')}
+            >
+              Back to Sign In
             </button>
           </form>
         )}
