@@ -1,4 +1,4 @@
-﻿import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabaseAuth, supabase } from '@/config/supabase';
@@ -16,6 +16,7 @@ export type AuthContextValue = {
   hasBusinessAccess: boolean;
   hasInfraAccess: boolean;
   hasMarketingAccess: boolean;
+  hasAnalyticsAccess: boolean;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -118,6 +119,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       hasBusinessAccess: adminUser?.has_business_access ?? true,
       hasInfraAccess: adminUser?.has_infra_access ?? false,
       hasMarketingAccess: adminUser?.has_marketing_access ?? false,
+      hasAnalyticsAccess: adminUser?.has_analytics_access ?? false,
       signInWithPassword,
       signOut,
     }),

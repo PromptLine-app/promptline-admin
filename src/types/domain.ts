@@ -12,6 +12,7 @@ export type AdminUser = {
   has_business_access: boolean;
   has_infra_access: boolean;
   has_marketing_access: boolean;
+  has_analytics_access: boolean;
   created_at: string;
   updated_at: string;
 };

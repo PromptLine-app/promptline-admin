@@ -11,7 +11,6 @@ import {
   FiUserCheck,
   FiTarget,
   FiTrendingUp,
-  FiBarChart2
 } from 'react-icons/fi';
 import './navigation.css';
 
@@ -42,10 +41,6 @@ export const SideNav = () => {
               <span className="side-nav__icon"><FiTarget /></span>
               Sentry
             </NavLink>
-            <NavLink to="/analytics" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
-              <span className="side-nav__icon"><FiBarChart2 /></span>
-              Analytics
-            </NavLink>
           </div>
         </div>
 
@@ -62,14 +57,8 @@ export const SideNav = () => {
             </NavLink>
             <NavLink to="/dunning" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiCreditCard /></span>
-              Failed Payments
+              Dunning
             </NavLink>
-          </div>
-        </div>
-
-        <div className="side-nav__section">
-          <p className="side-nav__section-label">Management</p>
-          <div className="side-nav__section-links">
             <NavLink to="/promos" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiGift /></span>
               Promo Codes
@@ -78,21 +67,27 @@ export const SideNav = () => {
               <span className="side-nav__icon"><FiUsers /></span>
               Team
             </NavLink>
-            <NavLink to="/calculator-leads" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
-              <span className="side-nav__icon"><FiTrendingUp /></span>
-              Calculator Leads
+            <NavLink to="/activity" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiActivity /></span>
+              Activity Log
             </NavLink>
+          </div>
+        </div>
+
+        <div className="side-nav__section">
+          <p className="side-nav__section-label">Inbound Leads</p>
+          <div className="side-nav__section-links">
             <NavLink to="/contact-requests" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiUserCheck /></span>
               Contact Requests
             </NavLink>
-            <NavLink to="/followups" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
-              <span className="side-nav__icon"><FiUserCheck /></span>
-              User Follow-ups
+            <NavLink to="/calculator-leads" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiTrendingUp /></span>
+              Calculator Leads
             </NavLink>
-            <NavLink to="/activity" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
-              <span className="side-nav__icon"><FiActivity /></span>
-              Activity Log
+            <NavLink to="/followups" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
+              <span className="side-nav__icon"><FiTarget /></span>
+              User Followups
             </NavLink>
           </div>
         </div>

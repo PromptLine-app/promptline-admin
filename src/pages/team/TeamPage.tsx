@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/config/supabase';
 import { AdminOnly } from '@/auth/AdminOnly';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -116,11 +116,18 @@ export const TeamPage = () => {
 
   const handleChangePortalAccess = async (user: AdminUser, accessType: string) => {
     try {
+      // Decode combined access type into individual booleans
+      const parts = accessType === 'all'
+        ? ['business', 'infra', 'marketing', 'analytics']
+        : accessType.split('_').filter(p => !['only', 'and'].includes(p));
+
       const updates = {
-        has_business_access: ['business_only', 'business_infra', 'business_marketing', 'all'].includes(accessType),
-        has_infra_access:    ['infra_only',    'business_infra', 'infra_marketing',     'all'].includes(accessType),
-        has_marketing_access:['marketing_only','business_marketing','infra_marketing',  'all'].includes(accessType),
+        has_business_access:  parts.includes('business'),
+        has_infra_access:     parts.includes('infra'),
+        has_marketing_access: parts.includes('marketing'),
+        has_analytics_access: parts.includes('analytics'),
       };
+
       const { error } = await supabase
         .from('admin_users')
         .update(updates)
@@ -135,6 +142,29 @@ export const TeamPage = () => {
     }
   };
 
+  /** Derive a combined access key from the user's individual boolean flags */
+  const getAccessType = (row: AdminUser): string => {
+    const b = row.has_business_access;
+    const i = row.has_infra_access;
+    const m = (row as any).has_marketing_access as boolean;
+    const a = (row as any).has_analytics_access as boolean;
+
+    if (b && i && m && a) return 'all';
+    if (b && i && m)      return 'business_infra_marketing';
+    if (b && i && a)      return 'business_infra_analytics';
+    if (b && m && a)      return 'business_marketing_analytics';
+    if (i && m && a)      return 'infra_marketing_analytics';
+    if (b && i)           return 'business_infra';
+    if (b && m)           return 'business_marketing';
+    if (b && a)           return 'business_analytics';
+    if (i && m)           return 'infra_marketing';
+    if (i && a)           return 'infra_analytics';
+    if (m && a)           return 'marketing_analytics';
+    if (i)                return 'infra_only';
+    if (m)                return 'marketing_only';
+    if (a)                return 'analytics_only';
+    return 'business_only';
+  };
 
   const columns: ColumnDef<AdminUser>[] = [
     {
@@ -166,31 +196,37 @@ export const TeamPage = () => {
       header: 'Portal Access',
       id: 'portal_access',
       cell: (row) => {
-        const b = row.has_business_access;
-        const i = row.has_infra_access;
-        const m = (row as any).has_marketing_access;
-        const accessType =
-          b && i && m ? 'all' :
-          b && i      ? 'business_infra' :
-          b && m      ? 'business_marketing' :
-          i && m      ? 'infra_marketing' :
-          i           ? 'infra_only' :
-          m           ? 'marketing_only' :
-                        'business_only';
+        const accessType = getAccessType(row);
         return (
           <select
             className="form-input"
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '175px', minHeight: '32px' }}
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem', width: '210px', minHeight: '32px' }}
             value={accessType}
             onChange={(e) => handleChangePortalAccess(row, e.target.value)}
           >
-            <option value="business_only">Business Only</option>
-            <option value="infra_only">Infra Only</option>
-            <option value="marketing_only">Marketing Only</option>
-            <option value="business_infra">Business + Infra</option>
-            <option value="business_marketing">Business + Marketing</option>
-            <option value="infra_marketing">Infra + Marketing</option>
-            <option value="all">All Portals</option>
+            <optgroup label="Single Portal">
+              <option value="business_only">Business Only</option>
+              <option value="infra_only">Infra Only</option>
+              <option value="marketing_only">Marketing Only</option>
+              <option value="analytics_only">Analytics Only</option>
+            </optgroup>
+            <optgroup label="Two Portals">
+              <option value="business_infra">Business + Infra</option>
+              <option value="business_marketing">Business + Marketing</option>
+              <option value="business_analytics">Business + Analytics</option>
+              <option value="infra_marketing">Infra + Marketing</option>
+              <option value="infra_analytics">Infra + Analytics</option>
+              <option value="marketing_analytics">Marketing + Analytics</option>
+            </optgroup>
+            <optgroup label="Three Portals">
+              <option value="business_infra_marketing">Business + Infra + Marketing</option>
+              <option value="business_infra_analytics">Business + Infra + Analytics</option>
+              <option value="business_marketing_analytics">Business + Marketing + Analytics</option>
+              <option value="infra_marketing_analytics">Infra + Marketing + Analytics</option>
+            </optgroup>
+            <optgroup label="All Portals">
+              <option value="all">All Portals</option>
+            </optgroup>
           </select>
         );
       },
@@ -317,4 +353,3 @@ export const TeamPage = () => {
     </div>
   );
 };
-

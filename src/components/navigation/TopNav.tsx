@@ -1,25 +1,33 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
-import { FiSun, FiMoon, FiLogOut, FiUser, FiServer, FiBriefcase, FiMail, FiChevronDown } from 'react-icons/fi';
+import { FiSun, FiMoon, FiLogOut, FiUser, FiServer, FiBriefcase, FiMail, FiBarChart2, FiChevronDown } from 'react-icons/fi';
 
-type Portal = 'business' | 'infra' | 'marketing';
+type Portal = 'business' | 'infra' | 'marketing' | 'analytics';
 
 export const TopNav = () => {
-  const { adminUser, signOut, hasBusinessAccess, hasInfraAccess, hasMarketingAccess } = useAuth();
+  const { adminUser, signOut, hasBusinessAccess, hasInfraAccess, hasMarketingAccess, hasAnalyticsAccess } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const isOnInfra = location.pathname.startsWith('/infra');
   const isOnMarketing = location.pathname.startsWith('/marketing');
+  const isOnAnalytics = location.pathname.startsWith('/analytics');
 
-  const currentPortal: Portal = isOnInfra ? 'infra' : isOnMarketing ? 'marketing' : 'business';
+  const currentPortal: Portal = isOnInfra
+    ? 'infra'
+    : isOnMarketing
+    ? 'marketing'
+    : isOnAnalytics
+    ? 'analytics'
+    : 'business';
 
   // Count how many portals the user can access
   const availablePortals: { label: string; icon: React.ReactNode; path: string; key: Portal }[] = [
     ...(hasBusinessAccess ? [{ label: 'Business', icon: <FiBriefcase />, path: '/', key: 'business' as Portal }] : []),
     ...(hasInfraAccess ? [{ label: 'Infrastructure', icon: <FiServer />, path: '/infra', key: 'infra' as Portal }] : []),
     ...(hasMarketingAccess ? [{ label: 'Marketing', icon: <FiMail />, path: '/marketing', key: 'marketing' as Portal }] : []),
+    ...(hasAnalyticsAccess ? [{ label: 'Analytics', icon: <FiBarChart2 />, path: '/analytics', key: 'analytics' as Portal }] : []),
   ];
 
   const showPortalSwitcher = availablePortals.length > 1;
