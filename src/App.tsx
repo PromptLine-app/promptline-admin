@@ -36,6 +36,7 @@ import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
 import { ExternalServicesPage } from '@/pages/infra/ExternalServicesPage';
 import { TwilioUsagePage } from '@/pages/infra/TwilioUsagePage';
 import { SentryPage } from '@/pages/infra/SentryPage';
+import { GoogleAnalyticsPage } from '@/pages/analytics/GoogleAnalyticsPage';
 
 // Marketing Portal pages
 import { MarketingDashboardPage } from '@/pages/marketing/MarketingDashboardPage';
@@ -153,6 +154,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="health" element={<HealthPage />} />
         <Route path="sentry" element={<SentryPage />} />
+        <Route path="analytics" element={<GoogleAnalyticsPage />} />
 
         <Route path="businesses" element={<BusinessListPage />} />
         <Route path="businesses/:id" element={<BusinessDetailPage />} />
@@ -194,6 +196,7 @@ export default function App() {
         <Route path="database" element={<div className="page-card"><div className="empty-state"><h3>Database</h3><p>Database monitoring coming soon.</p></div></div>} />
         <Route path="security" element={<div className="page-card"><div className="empty-state"><h3>Security</h3><p>Security monitoring coming soon.</p></div></div>} />
         <Route path="sentry" element={<SentryPage />} />
+        <Route path="analytics" element={<GoogleAnalyticsPage />} />
       </Route>
 
       {/* 📧 Marketing Portal 📧 */}
@@ -215,6 +218,7 @@ export default function App() {
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="send" element={<SendEmailPage />} />
         <Route path="senders" element={<SendersPage />} />
+        <Route path="analytics" element={<GoogleAnalyticsPage />} />
         <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>Page Not Found</h3><p>This marketing page doesn't exist.</p></div></div>} />
       </Route>
     </Routes>

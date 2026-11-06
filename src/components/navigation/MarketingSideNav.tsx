@@ -6,6 +6,7 @@ import {
   FiSend,
   FiSettings,
   FiBarChart2,
+  FiTrendingUp,
 } from 'react-icons/fi';
 import './navigation.css';
 
@@ -31,6 +32,13 @@ export const MarketingSideNav = () => {
             >
               <span className="side-nav__icon"><FiBarChart2 /></span>
               Dashboard
+            </NavLink>
+            <NavLink
+              to="/marketing/analytics"
+              className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}
+            >
+              <span className="side-nav__icon"><FiTrendingUp /></span>
+              Google Analytics
             </NavLink>
           </div>
         </div>
