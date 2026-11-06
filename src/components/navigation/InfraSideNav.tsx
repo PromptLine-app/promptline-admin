@@ -4,10 +4,8 @@ import {
   FiCpu,
   FiDatabase,
   FiShield,
-  FiActivity,
   FiDollarSign,
   FiTarget,
-  FiBarChart2
 } from 'react-icons/fi';
 import './navigation.css';
 
@@ -55,10 +53,6 @@ export const InfraSideNav = () => {
             <NavLink to="/infra/sentry" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
               <span className="side-nav__icon"><FiTarget /></span>
               Sentry
-            </NavLink>
-            <NavLink to="/infra/analytics" className={({ isActive }) => `side-nav__link ${isActive ? 'is-active' : ''}`}>
-              <span className="side-nav__icon"><FiBarChart2 /></span>
-              Analytics
             </NavLink>
           </div>
         </div>

@@ -5,9 +5,11 @@ import { LoginPage } from '@/pages/auth/LoginPage';
 import { AdminGuard } from '@/auth/AdminGuard';
 import { InfraGuard } from '@/auth/InfraGuard';
 import { MarketingGuard } from '@/auth/MarketingGuard';
+import { AnalyticsGuard } from '@/auth/AnalyticsGuard';
 import { SideNav } from '@/components/navigation/SideNav';
 import { InfraSideNav } from '@/components/navigation/InfraSideNav';
 import { MarketingSideNav } from '@/components/navigation/MarketingSideNav';
+import { AnalyticsSideNav } from '@/components/navigation/AnalyticsSideNav';
 import { TopNav } from '@/components/navigation/TopNav';
 
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
@@ -36,6 +38,15 @@ import { InfraDashboardPage } from '@/pages/infra/InfraDashboardPage';
 import { ExternalServicesPage } from '@/pages/infra/ExternalServicesPage';
 import { TwilioUsagePage } from '@/pages/infra/TwilioUsagePage';
 import { SentryPage } from '@/pages/infra/SentryPage';
+
+// Analytics Portal pages
+import { AnalyticsDashboardPage } from '@/pages/analytics/AnalyticsDashboardPage';
+import { RealtimePage } from '@/pages/analytics/RealtimePage';
+import { TrafficSourcesPage } from '@/pages/analytics/TrafficSourcesPage';
+import { GeographyPage } from '@/pages/analytics/GeographyPage';
+import { DevicesPage } from '@/pages/analytics/DevicesPage';
+import { TopPagesPage } from '@/pages/analytics/TopPagesPage';
+import { ConversionsPage } from '@/pages/analytics/ConversionsPage';
 import { GoogleAnalyticsPage } from '@/pages/analytics/GoogleAnalyticsPage';
 
 // Marketing Portal pages
@@ -47,7 +58,6 @@ import { SendersPage } from '@/pages/marketing/SendersPage';
 import { CampaignsPage } from '@/pages/marketing/CampaignsPage';
 import { CampaignDetailPage } from '@/pages/marketing/CampaignDetailPage';
 import { SequencesPage } from '@/pages/marketing/SequencesPage';
-
 
 const ErrorFallback = () => (
   <div
@@ -125,6 +135,21 @@ const MarketingLayout = () => {
   );
 };
 
+/** Analytics portal layout — uses AnalyticsSideNav */
+const AnalyticsLayout = () => {
+  return (
+    <div className="app-layout">
+      <AnalyticsSideNav />
+      <div className="app-main">
+        <TopNav />
+        <main className="app-content">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const { initializing } = useAuth();
 
@@ -154,7 +179,6 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="health" element={<HealthPage />} />
         <Route path="sentry" element={<SentryPage />} />
-        <Route path="analytics" element={<GoogleAnalyticsPage />} />
 
         <Route path="businesses" element={<BusinessListPage />} />
         <Route path="businesses/:id" element={<BusinessDetailPage />} />
@@ -196,7 +220,6 @@ export default function App() {
         <Route path="database" element={<div className="page-card"><div className="empty-state"><h3>Database</h3><p>Database monitoring coming soon.</p></div></div>} />
         <Route path="security" element={<div className="page-card"><div className="empty-state"><h3>Security</h3><p>Security monitoring coming soon.</p></div></div>} />
         <Route path="sentry" element={<SentryPage />} />
-        <Route path="analytics" element={<GoogleAnalyticsPage />} />
       </Route>
 
       {/* 📧 Marketing Portal 📧 */}
@@ -218,8 +241,29 @@ export default function App() {
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="send" element={<SendEmailPage />} />
         <Route path="senders" element={<SendersPage />} />
-        <Route path="analytics" element={<GoogleAnalyticsPage />} />
         <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>Page Not Found</h3><p>This marketing page doesn't exist.</p></div></div>} />
+      </Route>
+
+      {/* 📊 Analytics Portal 📊 */}
+      <Route
+        path="/analytics"
+        element={
+          <AdminGuard>
+            <AnalyticsGuard>
+              <AnalyticsLayout />
+            </AnalyticsGuard>
+          </AdminGuard>
+        }
+      >
+        <Route index element={<AnalyticsDashboardPage />} />
+        <Route path="realtime" element={<RealtimePage />} />
+        <Route path="traffic" element={<TrafficSourcesPage />} />
+        <Route path="locations" element={<GeographyPage />} />
+        <Route path="devices" element={<DevicesPage />} />
+        <Route path="pages" element={<TopPagesPage />} />
+        <Route path="goals" element={<ConversionsPage />} />
+        <Route path="credentials" element={<GoogleAnalyticsPage />} />
+        <Route path="*" element={<div className="page-card"><div className="empty-state"><h3>Page Not Found</h3><p>This analytics page doesn't exist.</p></div></div>} />
       </Route>
     </Routes>
     </Sentry.ErrorBoundary>
