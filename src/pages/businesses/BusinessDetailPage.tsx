@@ -6,6 +6,7 @@ import { AdminOnly } from '@/auth/AdminOnly';
 import { useToast } from '@/components/common/Toast';
 import { PageHeader } from '@/components/common/PageHeader';
 import { BusinessTabs } from '@/components/businesses/BusinessTabs';
+import { FeatureGrantsCard } from '@/components/businesses/FeatureGrantsCard';
 import { KpiCard } from '@/components/common/KpiCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -740,6 +741,10 @@ export const BusinessDetailPage = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="dashboard-section">
+        <FeatureGrantsCard tenantId={business.id} />
       </div>
 
       <div className="dashboard-section">
