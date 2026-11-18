@@ -240,7 +240,7 @@ export default async function handler(req, res) {
   }
 
   const { type = 'overview', range = '28d' } = req.query;
-  const propertyId = process.env.GA_PROPERTY_ID || '16279944223';
+  const propertyId = process.env.GA_PROPERTY_ID || '16368587087';
   const clientEmail = process.env.GA_CLIENT_EMAIL;
   const privateKey = process.env.GA_PRIVATE_KEY;
 

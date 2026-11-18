@@ -100,11 +100,11 @@ export const GoogleAnalyticsPage = () => {
             </div>
             <div>
               <span className="text-muted" style={{ display: 'block' }}>Measurement ID:</span>
-              <code style={{ fontWeight: 600 }}>G-QC5T423V41</code>
+              <code style={{ fontWeight: 600 }}>G-80FQP6297Z</code>
             </div>
             <div>
               <span className="text-muted" style={{ display: 'block' }}>Stream ID:</span>
-              <code>16279944223</code>
+              <code>16368587087</code>
             </div>
             <div>
               <span className="text-muted" style={{ display: 'block' }}>Enhanced Measurement:</span>
