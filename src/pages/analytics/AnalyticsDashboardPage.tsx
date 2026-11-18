@@ -25,6 +25,11 @@ interface DailyRow {
 interface OverviewData {
   kpis: KpiData;
   timeseries: DailyRow[];
+  _debug?: {
+    isLive: boolean;
+    error?: string;
+    propertyId?: string;
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -172,9 +177,29 @@ export const AnalyticsDashboardPage = () => {
       {error && (
         <div className="page-card" style={{ borderLeft: '3px solid var(--error-color)', marginBottom: '1rem' }}>
           <p style={{ color: 'var(--error-color)', margin: 0, fontWeight: 600 }}>⚠ {error}</p>
-          <p className="text-muted" style={{ fontSize: '0.82rem', margin: '0.4rem 0 0' }}>
-            Make sure the Analytics API serverless function is deployed and GA_PROPERTY_ID, GA_CLIENT_EMAIL, GA_PRIVATE_KEY env vars are set in Vercel.
+        </div>
+      )}
+
+      {/* Live / Demo Diagnostic Banner */}
+      {data?._debug && !data._debug.isLive && (
+        <div className="page-card" style={{ borderLeft: '3px solid #f59e0b', marginBottom: '1.25rem', background: 'rgba(245, 158, 11, 0.08)' }}>
+          <p style={{ color: '#f59e0b', margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>
+            ⚠ Demo Preview Data (Google Analytics Live API Not Connected)
           </p>
+          <p className="text-muted" style={{ fontSize: '0.82rem', margin: '0.4rem 0 0' }}>
+            Diagnostic: <strong style={{ color: 'var(--foreground)' }}>{data._debug.error || 'API returned fallback'}</strong>
+          </p>
+          {data._debug.propertyId && (
+            <p className="text-muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0' }}>
+              Target Property ID: <code style={{ color: 'var(--accent-color)' }}>{data._debug.propertyId}</code>
+            </p>
+          )}
+        </div>
+      )}
+
+      {data?._debug?.isLive && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', marginBottom: '1.25rem', padding: '0.3rem 0.75rem', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', fontSize: '0.78rem', fontWeight: 600 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} /> Connected to Google Analytics Live Data (Property: {data._debug.propertyId})
         </div>
       )}
 
@@ -263,4 +288,3 @@ export const AnalyticsDashboardPage = () => {
     </div>
   );
 };
-

@@ -39,7 +39,11 @@ async function getGoogleAccessToken(clientEmail, privateKey) {
   const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
   const unsignedToken = `${b64(header)}.${b64(claim)}`;
 
-  const formattedKey = privateKey.replace(/\\n/g, '\n');
+  const formattedKey = privateKey
+    .replace(/^["']|["']$/g, '')
+    .replace(/\\n/g, '\n')
+    .trim();
+
   const sign = crypto.createSign('RSA-SHA256');
   sign.update(unsignedToken);
   sign.end();
@@ -57,7 +61,7 @@ async function getGoogleAccessToken(clientEmail, privateKey) {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Google OAuth error: ${errText}`);
+    throw new Error(`Google OAuth token error (${res.status}): ${errText}`);
   }
 
   const { access_token } = await res.json();
@@ -83,7 +87,7 @@ async function runGa4Report(propertyId, token, body, isRealtime = false) {
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`GA4 API error: ${err}`);
+    throw new Error(`GA4 API error (${res.status}): ${err}`);
   }
 
   return await res.json();
@@ -92,11 +96,12 @@ async function runGa4Report(propertyId, token, body, isRealtime = false) {
 /**
  * Provide sensible fallback / demo data when credentials are not yet configured.
  */
-function getFallbackData(type, range) {
+function getFallbackData(type, range, debugInfo = {}) {
   const days = range === '7d' ? 7 : range === '90d' ? 90 : 28;
 
+  let baseData;
   if (type === 'realtime') {
-    return {
+    baseData = {
       activeUsers: 3,
       topPages: [
         { page: '/', users: 2 },
@@ -111,10 +116,8 @@ function getFallbackData(type, range) {
         { category: 'mobile', users: 1 },
       ],
     };
-  }
-
-  if (type === 'sources') {
-    return {
+  } else if (type === 'sources') {
+    baseData = {
       channelGroups: [
         { channel: 'Direct', sessions: Math.round(days * 42), pct: 45.2 },
         { channel: 'Organic Search', sessions: Math.round(days * 28), pct: 30.1 },
@@ -128,10 +131,8 @@ function getFallbackData(type, range) {
         { source: 'linkedin.com', medium: 'referral', sessions: Math.round(days * 8), users: Math.round(days * 7), bounceRate: 51.0, avgSessionDuration: 94 },
       ],
     };
-  }
-
-  if (type === 'geo') {
-    return {
+  } else if (type === 'geo') {
+    baseData = {
       countries: [
         { country: 'United States', users: Math.round(days * 55), sessions: Math.round(days * 68), pct: 68.2 },
         { country: 'Canada', users: Math.round(days * 12), sessions: Math.round(days * 14), pct: 14.8 },
@@ -147,10 +148,8 @@ function getFallbackData(type, range) {
         { city: 'New York', country: 'United States', users: Math.round(days * 7), sessions: Math.round(days * 8), newUsers: Math.round(days * 6) },
       ],
     };
-  }
-
-  if (type === 'devices') {
-    return {
+  } else if (type === 'devices') {
+    baseData = {
       categories: [
         { category: 'desktop', users: Math.round(days * 58), sessions: Math.round(days * 72), pct: 62.5 },
         { category: 'mobile', users: Math.round(days * 31), sessions: Math.round(days * 38), pct: 33.4 },
@@ -169,10 +168,8 @@ function getFallbackData(type, range) {
         { name: 'Android', users: Math.round(days * 6), sessions: Math.round(days * 7), pct: 6.5 },
       ],
     };
-  }
-
-  if (type === 'pages') {
-    return {
+  } else if (type === 'pages') {
+    baseData = {
       totalViews: Math.round(days * 148),
       rows: [
         { path: '/', title: 'PromptLine | AI Answering Service for Local Businesses', views: Math.round(days * 72), users: Math.round(days * 55), avgDurationSec: 110, bounceRate: 35.2 },
@@ -182,10 +179,8 @@ function getFallbackData(type, range) {
         { path: '/contact', title: 'Contact Sales | PromptLine', views: Math.round(days * 6), users: Math.round(days * 5), avgDurationSec: 90, bounceRate: 40.0 },
       ],
     };
-  }
-
-  if (type === 'goals') {
-    return {
+  } else if (type === 'goals') {
+    baseData = {
       totalConversions: Math.round(days * 5.4),
       overallRatePct: 4.8,
       goals: [
@@ -195,42 +190,50 @@ function getFallbackData(type, range) {
         { eventName: 'pricing_plan_selected', category: 'conversion', eventCount: Math.round(days * 0.6), totalUsers: Math.round(days * 0.5), conversionRatePct: 0.4 },
       ],
     };
-  }
+  } else {
+    // Default: Overview
+    const timeseries = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const baseUsers = 12 + Math.round(Math.sin(i * 0.5) * 6) + (i % 7 === 0 ? 8 : 0);
+      timeseries.push({
+        date: `${yr}${mo}${day}`,
+        users: baseUsers,
+        sessions: Math.round(baseUsers * 1.25),
+        pageviews: Math.round(baseUsers * 2.1),
+      });
+    }
 
-  // Default: Overview
-  const timeseries = [];
-  const today = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const yr = d.getFullYear();
-    const mo = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const baseUsers = 12 + Math.round(Math.sin(i * 0.5) * 6) + (i % 7 === 0 ? 8 : 0);
-    timeseries.push({
-      date: `${yr}${mo}${day}`,
-      users: baseUsers,
-      sessions: Math.round(baseUsers * 1.25),
-      pageviews: Math.round(baseUsers * 2.1),
-    });
-  }
+    const totalUsers = timeseries.reduce((acc, r) => acc + r.users, 0);
+    const totalSessions = timeseries.reduce((acc, r) => acc + r.sessions, 0);
+    const totalPageviews = timeseries.reduce((acc, r) => acc + r.pageviews, 0);
 
-  const totalUsers = timeseries.reduce((acc, r) => acc + r.users, 0);
-  const totalSessions = timeseries.reduce((acc, r) => acc + r.sessions, 0);
-  const totalPageviews = timeseries.reduce((acc, r) => acc + r.pageviews, 0);
+    baseData = {
+      kpis: {
+        totalUsers,
+        newUsers: Math.round(totalUsers * 0.82),
+        sessions: totalSessions,
+        pageviews: totalPageviews,
+        bounceRate: 36.8,
+        avgSessionDuration: 154,
+        usersDelta: 14.2,
+        sessionsDelta: 11.8,
+      },
+      timeseries,
+    };
+  }
 
   return {
-    kpis: {
-      totalUsers,
-      newUsers: Math.round(totalUsers * 0.82),
-      sessions: totalSessions,
-      pageviews: totalPageviews,
-      bounceRate: 36.8,
-      avgSessionDuration: 154,
-      usersDelta: 14.2,
-      sessionsDelta: 11.8,
+    ...baseData,
+    _debug: {
+      isLive: false,
+      ...debugInfo,
     },
-    timeseries,
   };
 }
 
@@ -240,9 +243,9 @@ export default async function handler(req, res) {
   }
 
   const { type = 'overview', range = '28d' } = req.query;
-  const propertyId = process.env.GA_PROPERTY_ID || '16368587087';
-  const clientEmail = process.env.GA_CLIENT_EMAIL;
-  const privateKey = process.env.GA_PRIVATE_KEY;
+  const propertyId = (process.env.GA_PROPERTY_ID || '16368587087').trim();
+  const clientEmail = (process.env.GA_CLIENT_EMAIL || '').trim();
+  const privateKey = (process.env.GA_PRIVATE_KEY || '').trim();
 
   const cacheKey = `${type}_${range}_${propertyId}`;
   const cached = getCached(cacheKey);
@@ -250,11 +253,15 @@ export default async function handler(req, res) {
     return res.status(200).json(cached);
   }
 
-  // If no credentials configured yet, return fallback demo data seamlessly
+  // Check if env vars are missing
   if (!clientEmail || !privateKey) {
-    const fallback = getFallbackData(type, range);
-    setCache(cacheKey, fallback);
-    return res.status(200).json(fallback);
+    const missing = [];
+    if (!clientEmail) missing.push('GA_CLIENT_EMAIL');
+    if (!privateKey) missing.push('GA_PRIVATE_KEY');
+    return res.status(200).json(getFallbackData(type, range, {
+      error: `Missing environment variable(s): ${missing.join(', ')} on Vercel`,
+      propertyId,
+    }));
   }
 
   try {
@@ -292,6 +299,7 @@ export default async function handler(req, res) {
         topPages: topPages.slice(0, 5),
         topCountries: topCountries.slice(0, 5),
         deviceBreakdown: [],
+        _debug: { isLive: true, propertyId },
       };
     } else if (type === 'sources') {
       const report = await runGa4Report(propertyId, token, {
@@ -331,7 +339,7 @@ export default async function handler(req, res) {
         pct: totalSessions > 0 ? (sessions / totalSessions) * 100 : 0,
       }));
 
-      resultData = { rows, channelGroups };
+      resultData = { rows, channelGroups, _debug: { isLive: true, propertyId } };
     } else if (type === 'geo') {
       const report = await runGa4Report(propertyId, token, {
         dateRanges: [{ startDate: daysAgo, endDate: 'today' }],
@@ -367,7 +375,7 @@ export default async function handler(req, res) {
         }))
         .sort((a, b) => b.users - a.users);
 
-      resultData = { countries, cities };
+      resultData = { countries, cities, _debug: { isLive: true, propertyId } };
     } else if (type === 'devices') {
       const report = await runGa4Report(propertyId, token, {
         dateRanges: [{ startDate: daysAgo, endDate: 'today' }],
@@ -415,7 +423,7 @@ export default async function handler(req, res) {
         pct: totalUsers > 0 ? (users / totalUsers) * 100 : 0,
       }));
 
-      resultData = { categories, browsers, operatingSystems };
+      resultData = { categories, browsers, operatingSystems, _debug: { isLive: true, propertyId } };
     } else if (type === 'pages') {
       const report = await runGa4Report(propertyId, token, {
         dateRanges: [{ startDate: daysAgo, endDate: 'today' }],
@@ -451,7 +459,7 @@ export default async function handler(req, res) {
         });
       }
 
-      resultData = { totalViews, rows };
+      resultData = { totalViews, rows, _debug: { isLive: true, propertyId } };
     } else {
       // Overview report
       const report = await runGa4Report(propertyId, token, {
@@ -509,16 +517,18 @@ export default async function handler(req, res) {
           sessionsDelta: 0,
         },
         timeseries,
+        _debug: { isLive: true, propertyId },
       };
     }
 
     setCache(cacheKey, resultData);
     return res.status(200).json(resultData);
   } catch (err) {
-    console.error('GA4 API error, serving fallback:', err.message);
-    const fallback = getFallbackData(type, range);
-    setCache(cacheKey, fallback);
-    return res.status(200).json(fallback);
+    console.error('GA4 API error:', err.message);
+    // Don't cache errors so user can immediately retry
+    return res.status(200).json(getFallbackData(type, range, {
+      error: err.message,
+      propertyId,
+    }));
   }
 }
-
