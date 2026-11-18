@@ -250,8 +250,8 @@ export const AnalyticsDashboardPage = () => {
           {[
             { label: 'Property', value: 'Promptline Marketing Website' },
             { label: 'Stream URL', value: 'https://promptline.app' },
-            { label: 'Stream ID', value: '16279944223' },
-            { label: 'Measurement ID', value: 'G-QC5T423V41' },
+            { label: 'Stream ID', value: '16368587087' },
+            { label: 'Measurement ID', value: 'G-80FQP6297Z' },
           ].map(item => (
             <div key={item.label}>
               <p className="text-muted" style={{ fontSize: '0.75rem', fontWeight: 600, margin: 0 }}>{item.label}</p>
