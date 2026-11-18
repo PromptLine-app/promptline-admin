@@ -1,13 +1,14 @@
 import crypto from 'crypto';
 
-// In-memory cache for reports (5 min TTL)
+// In-memory cache for reports
 const cache = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 
-function getCached(key) {
+function getCached(key, customTtl) {
   const item = cache.get(key);
   if (!item) return null;
-  if (Date.now() - item.ts > CACHE_TTL_MS) {
+  const ttl = customTtl !== undefined ? customTtl : DEFAULT_CACHE_TTL_MS;
+  if (Date.now() - item.ts > ttl) {
     cache.delete(key);
     return null;
   }
@@ -23,7 +24,7 @@ function setCache(key, data) {
  */
 async function getGoogleAccessToken(clientEmail, privateKey) {
   const cacheKey = `token_${clientEmail}`;
-  const cached = getCached(cacheKey);
+  const cached = getCached(cacheKey, 50 * 60 * 1000); // 50 mins
   if (cached) return cached;
 
   const now = Math.floor(Date.now() / 1000);
@@ -101,19 +102,48 @@ function getFallbackData(type, range, debugInfo = {}) {
 
   let baseData;
   if (type === 'realtime') {
+    const minuteBars = Array.from({ length: 30 }, (_, i) => ({
+      minute: 29 - i,
+      users: i >= 25 ? Math.floor(Math.random() * 25 + 35) : Math.floor(Math.random() * 5),
+    }));
+
     baseData = {
-      activeUsers: 3,
+      activeUsers: 59,
+      activeUsersLast5: 57,
+      minuteBars,
       topPages: [
-        { page: '/', users: 2 },
-        { page: '/pricing', users: 1 },
+        { page: 'PromptLine', views: 67, users: 58 },
+        { page: 'Home Services (Roofing, HVAC...)', views: 2, users: 2 },
       ],
+      totalPageviews: 69,
       topCountries: [
-        { country: 'United States', users: 2 },
+        { country: 'United States', users: 55 },
+        { country: 'India', users: 3 },
         { country: 'Canada', users: 1 },
       ],
+      topCities: [
+        { country: 'United States', city: 'Cedar Rapids', users: 24 },
+        { country: 'United States', city: 'Des Moines', users: 18 },
+        { country: 'India', city: 'Mumbai', users: 3 },
+      ],
+      topEvents: [
+        { eventName: 'page_view', count: 68 },
+        { eventName: 'first_visit', count: 61 },
+        { eventName: 'session_start', count: 59 },
+        { eventName: 'scroll', count: 21 },
+        { eventName: 'user_engagement', count: 5 },
+        { eventName: 'form_start', count: 2 },
+      ],
+      totalEvents: 216,
       deviceBreakdown: [
-        { category: 'desktop', users: 2 },
-        { category: 'mobile', users: 1 },
+        { category: 'desktop', users: 48 },
+        { category: 'mobile', users: 11 },
+      ],
+      totalDeviceUsers: 59,
+      topSources: [
+        { source: '(direct)', users: 42 },
+        { source: 'google', users: 12 },
+        { source: 'linkedin', users: 5 },
       ],
     };
   } else if (type === 'sources') {
@@ -243,12 +273,15 @@ export default async function handler(req, res) {
   }
 
   const { type = 'overview', range = '28d' } = req.query;
-  const propertyId = (process.env.GA_PROPERTY_ID || '16368587087').trim();
+  const propertyId = (process.env.GA_PROPERTY_ID || '565054817').trim();
   const clientEmail = (process.env.GA_CLIENT_EMAIL || '').trim();
   const privateKey = (process.env.GA_PRIVATE_KEY || '').trim();
 
+  const isRealtimeQuery = type === 'realtime';
+  const ttl = isRealtimeQuery ? 10 * 1000 : DEFAULT_CACHE_TTL_MS;
+
   const cacheKey = `${type}_${range}_${propertyId}`;
-  const cached = getCached(cacheKey);
+  const cached = getCached(cacheKey, ttl);
   if (cached) {
     return res.status(200).json(cached);
   }
@@ -271,34 +304,197 @@ export default async function handler(req, res) {
     let resultData;
 
     if (type === 'realtime') {
-      const report = await runGa4Report(
-        propertyId,
-        token,
-        {
-          dimensions: [{ name: 'unifiedScreenName' }, { name: 'country' }],
-          metrics: [{ name: 'activeUsers' }],
-        },
-        true,
-      );
+      const [
+        minuteReport,
+        pagesReport,
+        countriesReport,
+        eventsReport,
+        devicesReport,
+        sourcesReport,
+      ] = await Promise.all([
+        runGa4Report(
+          propertyId,
+          token,
+          {
+            dimensions: [{ name: 'minutesAgo' }],
+            metrics: [{ name: 'activeUsers' }],
+          },
+          true,
+        ).catch((err) => {
+          console.warn('Minute report error:', err.message);
+          return null;
+        }),
+        runGa4Report(
+          propertyId,
+          token,
+          {
+            dimensions: [{ name: 'unifiedScreenName' }],
+            metrics: [{ name: 'screenPageViews' }, { name: 'activeUsers' }],
+            limit: 10,
+          },
+          true,
+        ).catch((err) => {
+          console.warn('Pages report error:', err.message);
+          return null;
+        }),
+        runGa4Report(
+          propertyId,
+          token,
+          {
+            dimensions: [{ name: 'country' }, { name: 'city' }],
+            metrics: [{ name: 'activeUsers' }],
+            limit: 15,
+          },
+          true,
+        ).catch((err) => {
+          console.warn('Countries report error:', err.message);
+          return null;
+        }),
+        runGa4Report(
+          propertyId,
+          token,
+          {
+            dimensions: [{ name: 'eventName' }],
+            metrics: [{ name: 'eventCount' }],
+            limit: 10,
+          },
+          true,
+        ).catch((err) => {
+          console.warn('Events report error:', err.message);
+          return null;
+        }),
+        runGa4Report(
+          propertyId,
+          token,
+          {
+            dimensions: [{ name: 'deviceCategory' }],
+            metrics: [{ name: 'activeUsers' }],
+          },
+          true,
+        ).catch((err) => {
+          console.warn('Devices report error:', err.message);
+          return null;
+        }),
+        runGa4Report(
+          propertyId,
+          token,
+          {
+            dimensions: [{ name: 'firstUserSource' }],
+            metrics: [{ name: 'activeUsers' }],
+            limit: 10,
+          },
+          true,
+        ).catch((err) => {
+          console.warn('Sources report error:', err.message);
+          return null;
+        }),
+      ]);
 
-      const topPages = [];
-      const topCountries = [];
-      let totalActive = 0;
+      // Parse minutes
+      const minuteBars = Array.from({ length: 30 }, (_, i) => ({
+        minute: 29 - i,
+        users: 0,
+      }));
+      let activeUsersLast30 = 0;
+      let activeUsersLast5 = 0;
 
-      for (const row of report.rows || []) {
-        const page = row.dimensionValues?.[0]?.value || '/';
-        const country = row.dimensionValues?.[1]?.value || 'Unknown';
-        const count = parseInt(row.metricValues?.[0]?.value || '0', 10);
-        totalActive += count;
-        topPages.push({ page, users: count });
-        topCountries.push({ country, users: count });
+      if (minuteReport?.rows) {
+        for (const row of minuteReport.rows) {
+          const minAgo = parseInt(row.dimensionValues?.[0]?.value || '0', 10);
+          const users = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          activeUsersLast30 += users;
+          if (minAgo <= 4) {
+            activeUsersLast5 += users;
+          }
+          const idx = 29 - minAgo;
+          if (idx >= 0 && idx < 30) {
+            minuteBars[idx].users = users;
+          }
+        }
       }
 
+      // Parse pages
+      const topPages = [];
+      let totalPageviews = 0;
+      if (pagesReport?.rows) {
+        for (const row of pagesReport.rows) {
+          const page = row.dimensionValues?.[0]?.value || '/';
+          const views = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          const users = parseInt(row.metricValues?.[1]?.value || '0', 10);
+          totalPageviews += views;
+          topPages.push({ page, views, users });
+        }
+      }
+
+      // Parse countries & cities
+      const topCountries = [];
+      const topCities = [];
+      if (countriesReport?.rows) {
+        for (const row of countriesReport.rows) {
+          const country = row.dimensionValues?.[0]?.value || 'Unknown';
+          const city = row.dimensionValues?.[1]?.value || '(not set)';
+          const users = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          topCountries.push({ country, users });
+          if (city && city !== '(not set)') {
+            topCities.push({ country, city, users });
+          }
+        }
+      }
+
+      // Parse events
+      const topEvents = [];
+      let totalEvents = 0;
+      if (eventsReport?.rows) {
+        for (const row of eventsReport.rows) {
+          const eventName = row.dimensionValues?.[0]?.value || '';
+          const count = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          totalEvents += count;
+          topEvents.push({ eventName, count });
+        }
+      }
+
+      // Parse devices
+      const deviceBreakdown = [];
+      let totalDeviceUsers = 0;
+      if (devicesReport?.rows) {
+        for (const row of devicesReport.rows) {
+          const category = row.dimensionValues?.[0]?.value?.toLowerCase() || 'desktop';
+          const users = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          totalDeviceUsers += users;
+          deviceBreakdown.push({ category, users });
+        }
+      }
+
+      // Parse sources
+      const topSources = [];
+      if (sourcesReport?.rows) {
+        for (const row of sourcesReport.rows) {
+          const source = row.dimensionValues?.[0]?.value || '(direct)';
+          const users = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          topSources.push({ source, users });
+        }
+      }
+
+      const activeUsers = Math.max(
+        activeUsersLast30,
+        deviceBreakdown.reduce((sum, d) => sum + d.users, 0),
+        topPages.reduce((sum, p) => sum + p.users, 0),
+        0
+      );
+
       resultData = {
-        activeUsers: totalActive,
-        topPages: topPages.slice(0, 5),
-        topCountries: topCountries.slice(0, 5),
-        deviceBreakdown: [],
+        activeUsers,
+        activeUsersLast5: activeUsersLast5 || activeUsers,
+        minuteBars,
+        topPages,
+        totalPageviews,
+        topCountries,
+        topCities,
+        topEvents,
+        totalEvents,
+        deviceBreakdown,
+        totalDeviceUsers,
+        topSources,
         _debug: { isLive: true, propertyId },
       };
     } else if (type === 'sources') {
