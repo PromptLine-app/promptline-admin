@@ -60,7 +60,7 @@ export const GoogleAnalyticsPage = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <span style={{ fontWeight: 600, display: 'inline-block', width: '90px' }}>Login:</span> 
-                <code style={{ background: 'hsl(var(--background))', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid hsl(var(--border))' }}>noreply@promptline.app</code>
+                <code style={{ background: 'hsl(var(--background))', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid hsl(var(--border))' }}>inof@promptline.app</code>
               </div>
               <button 
                 type="button" 
