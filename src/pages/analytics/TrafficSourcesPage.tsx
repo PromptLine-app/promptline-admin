@@ -14,6 +14,10 @@ interface SourceRow {
 interface TrafficData {
   rows: SourceRow[];
   channelGroups: { channel: string; sessions: number; pct: number }[];
+  _debug?: {
+    isLive?: boolean;
+    isRealtimeFallback?: boolean;
+  };
 }
 
 const RANGES = [
@@ -146,10 +150,17 @@ export const TrafficSourcesPage = () => {
             </table>
           </div>
         ) : (
-          <p className="text-muted" style={{ textAlign: 'center', padding: '2rem 0' }}>No traffic source data for this period.</p>
+          <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+            <p className="text-muted" style={{ margin: 0, fontSize: '0.9rem' }}>No traffic source data recorded yet for this period.</p>
+            <p className="text-muted" style={{ margin: '0.4rem 0 1rem', fontSize: '0.82rem' }}>
+              Google Analytics attributes traffic channels (Direct, Organic Search, Referral) during its daily 24h batch. Live visitors are tracked continuously in Realtime.
+            </p>
+            <a href="/analytics/realtime" className="btn btn--sm btn--primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              View Realtime Visitors →
+            </a>
+          </div>
         )}
       </div>
     </div>
   );
 };
-

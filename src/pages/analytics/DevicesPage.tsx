@@ -20,6 +20,10 @@ interface DevicesData {
   categories: DeviceCategory[];
   browsers: ItemBreakdown[];
   operatingSystems: ItemBreakdown[];
+  _debug?: {
+    isLive?: boolean;
+    isRealtimeFallback?: boolean;
+  };
 }
 
 const RANGES = [
@@ -115,8 +119,14 @@ export const DevicesPage = () => {
             </div>
           ))
         ) : (
-          <div className="page-card" style={{ width: '100%' }}>
-            <p className="text-muted">No device category data available.</p>
+          <div className="page-card" style={{ width: '100%', textAlign: 'center', padding: '2rem 1rem' }}>
+            <p className="text-muted" style={{ margin: 0, fontSize: '0.9rem' }}>No device category data available for this period.</p>
+            <p className="text-muted" style={{ margin: '0.4rem 0 1rem', fontSize: '0.82rem' }}>
+              Device hardware and platform breakdowns will populate as visitors browse promptline.app.
+            </p>
+            <a href="/analytics/realtime" className="btn btn--sm btn--primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Check Live Devices in Realtime →
+            </a>
           </div>
         )}
       </div>
@@ -178,4 +188,3 @@ export const DevicesPage = () => {
     </div>
   );
 };
-

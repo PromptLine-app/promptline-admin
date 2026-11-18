@@ -13,6 +13,10 @@ interface GeoRow {
 interface GeoData {
   countries: { country: string; users: number; sessions: number; pct: number }[];
   cities: GeoRow[];
+  _debug?: {
+    isLive?: boolean;
+    isRealtimeFallback?: boolean;
+  };
 }
 
 const RANGES = [
@@ -48,8 +52,8 @@ export const GeographyPage = () => {
   useEffect(() => { void load(); }, [load]);
 
   const topUsers = view === 'countries'
-    ? Math.max(...(data?.countries.map(c => c.users) ?? [1]), 1)
-    : Math.max(...(data?.cities.map(c => c.users) ?? [1]), 1);
+    ? Math.max(...(data?.countries?.map(c => c.users) ?? [1]), 1)
+    : Math.max(...(data?.cities?.map(c => c.users) ?? [1]), 1);
 
   return (
     <div className="page-content">
@@ -148,10 +152,17 @@ export const GeographyPage = () => {
             </table>
           </div>
         ) : (
-          <p className="text-muted" style={{ textAlign: 'center', padding: '2rem 0' }}>No geographic data for this period.</p>
+          <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+            <p className="text-muted" style={{ margin: 0, fontSize: '0.9rem' }}>No geographic data recorded yet for this period.</p>
+            <p className="text-muted" style={{ margin: '0.4rem 0 1rem', fontSize: '0.82rem' }}>
+              Google Analytics aggregates country & city historical data in 24–48h batches. Active visitor locations are updating live on the Realtime page!
+            </p>
+            <a href="/analytics/realtime" className="btn btn--sm btn--primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              View Realtime Locations →
+            </a>
+          </div>
         )}
       </div>
     </div>
   );
 };
-

@@ -14,6 +14,10 @@ interface PageRow {
 interface PagesData {
   rows: PageRow[];
   totalViews: number;
+  _debug?: {
+    isLive?: boolean;
+    isRealtimeFallback?: boolean;
+  };
 }
 
 const RANGES = [
@@ -140,35 +144,30 @@ export const TopPagesPage = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem', opacity: 0.65, fontWeight: 600 }}>Page Path</th>
-                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem', opacity: 0.65, fontWeight: 600 }}>Views</th>
-                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem', opacity: 0.65, fontWeight: 600 }}>Users</th>
-                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem', opacity: 0.65, fontWeight: 600 }}>Avg Time</th>
-                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem', opacity: 0.65, fontWeight: 600 }}>Bounce Rate</th>
-                  <th style={{ textAlign: 'center', padding: '0.6rem 0.75rem', opacity: 0.65, fontWeight: 600 }}>Live</th>
+                  {['Page Path & Title', 'Views', 'Users', 'Avg Duration', 'Bounce Rate', ''].map(h => (
+                    <th key={h} style={{ textAlign: h === 'Page Path & Title' ? 'left' : 'right', padding: '0.5rem 0.75rem', opacity: 0.65, fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.map((row, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>
-                      <p style={{ fontWeight: 600, margin: 0, fontFamily: 'monospace' }}>{row.path}</p>
-                      {row.title && row.title !== row.path && (
-                        <p className="text-muted" style={{ fontSize: '0.78rem', margin: '0.15rem 0 0' }}>{row.title}</p>
-                      )}
+                    <td style={{ padding: '0.5rem 0.75rem', maxWidth: 340 }}>
+                      <p style={{ margin: 0, fontWeight: 600, fontFamily: 'monospace', fontSize: '0.85rem' }}>{row.path}</p>
+                      <p className="text-muted" style={{ margin: '0.15rem 0 0', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.title}</p>
                     </td>
-                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: 600 }}>{row.views.toLocaleString()}</td>
-                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{row.users.toLocaleString()}</td>
-                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{fmtSeconds(row.avgDurationSec)}</td>
-                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{row.bounceRate.toFixed(1)}%</td>
-                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: 600 }}>{row.views.toLocaleString()}</td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{row.users.toLocaleString()}</td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{fmtSeconds(row.avgDurationSec)}</td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{row.bounceRate.toFixed(1)}%</td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
                       <a
-                        href={`https://promptline.app${row.path.startsWith('/') ? row.path : '/' + row.path}`}
+                        href={`https://promptline.app${row.path.startsWith('/') ? row.path : `/${row.path}`}`}
                         target="_blank"
-                        rel="noopener noreferrer"
-                        className="icon-button"
-                        title="Visit on promptline.app"
-                        style={{ fontSize: '0.85rem' }}
+                        rel="noreferrer"
+                        className="btn btn--ghost btn--sm"
+                        style={{ padding: '0.2rem 0.4rem', opacity: 0.6 }}
+                        title="Open page in new tab"
                       >
                         <FiExternalLink />
                       </a>
@@ -179,12 +178,17 @@ export const TopPagesPage = () => {
             </table>
           </div>
         ) : (
-          <p className="text-muted" style={{ textAlign: 'center', padding: '2rem 0' }}>
-            {search ? 'No pages matched your filter.' : 'No page view data recorded yet.'}
-          </p>
+          <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+            <p className="text-muted" style={{ margin: 0, fontSize: '0.9rem' }}>No page view data recorded yet for this period.</p>
+            <p className="text-muted" style={{ margin: '0.4rem 0 1rem', fontSize: '0.82rem' }}>
+              Historical page views are compiled in GA4 daily batches (24–48h). Active pages and screen views appear instantly in Realtime!
+            </p>
+            <a href="/analytics/realtime" className="btn btn--sm btn--primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              View Live Active Pages →
+            </a>
+          </div>
         )}
       </div>
     </div>
   );
 };
-

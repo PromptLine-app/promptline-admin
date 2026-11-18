@@ -29,6 +29,7 @@ interface OverviewData {
     isLive: boolean;
     error?: string;
     propertyId?: string;
+    isRealtimeFallback?: boolean;
   };
 }
 
@@ -198,8 +199,20 @@ export const AnalyticsDashboardPage = () => {
       )}
 
       {data?._debug?.isLive && (
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', marginBottom: '1.25rem', padding: '0.3rem 0.75rem', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', fontSize: '0.78rem', fontWeight: 600 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} /> Connected to Google Analytics Live Data (Property: {data._debug.propertyId})
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.75rem', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', fontSize: '0.78rem', fontWeight: 600, width: 'fit-content' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} /> Connected to Google Analytics Live Data (Property: {data._debug.propertyId})
+          </div>
+          {data._debug.isRealtimeFallback && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 1rem', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '6px', fontSize: '0.82rem', color: '#93c5fd' }}>
+              <span>
+                ⚡ <strong>Realtime Live Data:</strong> GA4 compiles multi-day batch reports in 24–48 hours for new properties. Currently showing active visitors from Realtime!
+              </span>
+              <a href="/analytics/realtime" className="btn btn--sm btn--primary" style={{ marginLeft: '1rem', whiteSpace: 'nowrap', textDecoration: 'none' }}>
+                Realtime Stream →
+              </a>
+            </div>
+          )}
         </div>
       )}
 
@@ -262,7 +275,17 @@ export const AnalyticsDashboardPage = () => {
         ) : data?.timeseries && data.timeseries.length > 0 ? (
           <BarChart data={data.timeseries} field={chartField} />
         ) : (
-          <p className="text-muted" style={{ textAlign: 'center', padding: '2rem 0' }}>No timeseries data available.</p>
+          <div style={{ padding: '2rem 1rem', textAlign: 'center' }}>
+            <p className="text-muted" style={{ margin: 0, fontSize: '0.9rem' }}>
+              No historical batch data yet. GA4 compiles daily timeseries data every 24–48 hours for new properties.
+            </p>
+            <p className="text-muted" style={{ margin: '0.4rem 0 1rem', fontSize: '0.82rem' }}>
+              Live visitor traffic is active and updating live on the Realtime page!
+            </p>
+            <a href="/analytics/realtime" className="btn btn--sm btn--primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Open Realtime Activity Monitor
+            </a>
+          </div>
         )}
       </div>
 
